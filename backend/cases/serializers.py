@@ -1,6 +1,7 @@
 """
 Case, Complaint, CrimeScene, CaseComplainant serializers.
 """
+import json
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Case, Complaint, CaseComplainant, CrimeSceneReport
@@ -151,3 +152,19 @@ class CrimeSceneReportCreateSerializer(serializers.ModelSerializer):
 class CrimeSceneReportApproveSerializer(serializers.Serializer):
     """Supervisor approves crime scene report (or chief creates without approval)."""
     approved = serializers.BooleanField()
+
+
+class WitnessInputSerializer(serializers.Serializer):
+    """Single witness: national_id and phone (for crime scene)."""
+    national_id = serializers.CharField(allow_blank=False)
+    phone = serializers.CharField(allow_blank=False)
+
+
+class CrimeSceneCaseCreateSerializer(serializers.Serializer):
+    """Create case from crime scene (Workflow B). Officer+ only; not trainee."""
+    title = serializers.CharField(max_length=255)
+    description = serializers.CharField(required=False, allow_blank=True, default='')
+    scene_date = serializers.DateField(help_text='Date of crime scene')
+    scene_time = serializers.TimeField(help_text='Time of crime scene')
+    location_description = serializers.CharField(required=False, allow_blank=True, default='')
+    witnesses = WitnessInputSerializer(many=True, required=False, default=list)

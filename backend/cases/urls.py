@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path('cases/', views.CaseListCreateView.as_view(), name='case-list-create'),
+    path('cases/crime-scene/', views.CrimeSceneCaseCreateView.as_view(), name='case-crime-scene-create'),
     path('cases/<int:pk>/', views.CaseDetailView.as_view(), name='case-detail'),
     path('complaints/', views.ComplaintListCreateView.as_view(), name='complaint-list-create'),
     path('complaints/<int:pk>/', views.ComplaintDetailView.as_view(), name='complaint-detail'),

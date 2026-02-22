@@ -1,18 +1,23 @@
 """
 Case, Complaint, CrimeScene API. Workflow: trainee review -> officer approval; crime scene approval.
 """
+import json
+from datetime import datetime
+
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from .models import Case, Complaint, CaseComplainant, CrimeSceneReport
 from .serializers import (
     CaseListSerializer,
     CaseDetailSerializer,
     CaseCreateUpdateSerializer,
+    CrimeSceneCaseCreateSerializer,
     ComplaintListSerializer,
     ComplaintDetailSerializer,
     ComplaintCreateSerializer,
@@ -69,6 +74,54 @@ class CaseDetailView(generics.RetrieveUpdateAPIView):
         if self.request.method in ('PUT', 'PATCH'):
             return CaseCreateUpdateSerializer
         return CaseDetailSerializer
+
+
+class CrimeSceneCaseCreateView(APIView):
+    """
+    Workflow B: Create case from crime scene. Any police role except trainee.
+    Required: title, scene_date, scene_time. Optional: description, location_description, witnesses (list of {national_id, phone}).
+    If creator is Police Chief -> auto approved (case OPEN). Else -> case PENDING_APPROVAL, report pending supervisor.
+    """
+    permission_classes = [IsAuthenticated, IsOfficerOrAbove]
+
+    def post(self, request):
+        ser = CrimeSceneCaseCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        scene_datetime = timezone.make_aware(
+            datetime.combine(data['scene_date'], data['scene_time']),
+            timezone.get_current_timezone(),
+        )
+        is_chief = request.user.has_role('Police Chief')
+        case = Case.objects.create(
+            title=data['title'],
+            description=data.get('description') or '',
+            severity=Case.SEVERITY_LEVEL_3,
+            status=Case.STATUS_OPEN if is_chief else Case.STATUS_PENDING_APPROVAL,
+            is_crime_scene_case=True,
+            created_by=request.user,
+        )
+        witnesses_json = json.dumps(data.get('witnesses') or [])
+        report = CrimeSceneReport.objects.create(
+            case=case,
+            reported_by=request.user,
+            scene_datetime=scene_datetime,
+            location_description=data.get('location_description') or '',
+            witnesses_contact_info=witnesses_json,
+        )
+        if is_chief:
+            report.approved_by_supervisor = request.user
+            report.approved_at = timezone.now()
+            report.save()
+        else:
+            from django.contrib.auth import get_user_model
+            for u in get_user_model().objects.filter(roles__name='Sergeant'):
+                notify(u, 'Crime scene report pending approval', str(case), 'crime_scene_pending', 'CrimeSceneReport', report.pk)
+        log_audit(request.user, 'create', 'Case', case.pk, f'Crime scene case created: {case.title}')
+        return Response(
+            {'success': True, 'data': CaseListSerializer(case).data},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ComplaintListCreateView(generics.ListCreateAPIView):
@@ -247,10 +300,12 @@ class CrimeSceneReportApproveView(APIView):
                 {'success': False, 'error': {'message': 'Already approved.'}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        from django.utils import timezone
         report.approved_by_supervisor = request.user
         report.approved_at = timezone.now()
         report.save()
+        if report.case.status == Case.STATUS_PENDING_APPROVAL:
+            report.case.status = Case.STATUS_OPEN
+            report.case.save(update_fields=['status', 'updated_at'])
         log_audit(request.user, 'approve', 'CrimeSceneReport', report.pk, 'Approved')
         return Response({'success': True, 'data': CrimeSceneReportSerializer(report).data})
 
