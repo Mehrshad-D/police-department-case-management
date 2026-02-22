@@ -17,7 +17,7 @@ from .serializers import (
     UserUpdateSerializer,
     LoginSerializer,
 )
-from .permissions import IsSystemAdmin
+from .permissions import IsSystemAdmin, IsOfficerOrAbove
 from core.utils import log_audit
 
 User = get_user_model()
@@ -67,6 +67,15 @@ class UserListView(generics.ListAPIView):
     serializer_class = UserListSerializer
     permission_classes = [IsAuthenticated, IsSystemAdmin]
     filterset_fields = ['is_active', 'username', 'email']
+
+
+class DetectivesListView(generics.ListAPIView):
+    """List users with Detective role (for assigning detective to a case). Officer+ can call."""
+    serializer_class = UserListSerializer
+    permission_classes = [IsAuthenticated, IsOfficerOrAbove]
+
+    def get_queryset(self):
+        return User.objects.filter(roles__name__iexact='Detective').distinct().order_by('username')
 
 
 class UserDetailView(generics.RetrieveUpdateAPIView):

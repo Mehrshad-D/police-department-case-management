@@ -25,6 +25,9 @@ class CaseListSerializer(serializers.ModelSerializer):
 
 class CaseDetailSerializer(serializers.ModelSerializer):
     created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    assigned_detective_username = serializers.CharField(
+        source='assigned_detective.username', read_only=True, allow_null=True
+    )
     complainants = serializers.SerializerMethodField()
     complaint_origin = serializers.SerializerMethodField()
 
@@ -32,8 +35,8 @@ class CaseDetailSerializer(serializers.ModelSerializer):
         model = Case
         fields = [
             'id', 'title', 'description', 'severity', 'status', 'is_crime_scene_case',
-            'created_by', 'created_by_username', 'assigned_detective', 'approved_by_captain',
-            'complainants', 'complaint_origin', 'created_at', 'updated_at',
+            'created_by', 'created_by_username', 'assigned_detective', 'assigned_detective_username',
+            'approved_by_captain', 'complainants', 'complaint_origin', 'created_at', 'updated_at',
         ]
 
     def get_complainants(self, obj):
