@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useComplaint } from '@/hooks/useComplaints'
 import { useComplaintTraineeReview, useComplaintOfficerReview, useComplaintCorrect } from '@/hooks/useComplaints'
+import { useAuthStore } from '@/store/authStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -12,6 +13,7 @@ import { getApiErrorMessage } from '@/api/client'
 export function ComplaintDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const hasRole = useAuthStore((s) => s.hasRole)
   const complaintId = id ? parseInt(id, 10) : null
   const { data: complaint, isLoading, error } = useComplaint(complaintId)
   const traineeReview = useComplaintTraineeReview()
@@ -33,8 +35,10 @@ export function ComplaintDetailPage() {
     return <Skeleton className="h-64 w-full" />
   }
 
-  const canTraineeReview = complaint.status === 'pending_trainee'
-  const canOfficerReview = complaint.status === 'pending_officer'
+  const isIntern = hasRole('Intern')
+  const isPoliceOfficer = hasRole('Police Officer')
+  const canTraineeReview = complaint.status === 'pending_trainee' && isIntern
+  const canOfficerReview = complaint.status === 'pending_officer' && isPoliceOfficer
   const needsCorrection = complaint.status === 'correction_needed'
   const canResubmit = needsCorrection && complaint.correction_count < 3
   const rejectedPermanently = complaint.status === 'rejected' && complaint.correction_count >= 3
