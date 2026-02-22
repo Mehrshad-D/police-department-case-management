@@ -45,6 +45,10 @@ export const authApi = {
 export const usersApi = {
   list: (params?: { is_active?: boolean; username?: string }) =>
     apiClient.get<PaginatedResponse<User> | User[]>('auth/users/', { params }).then((res) => res.data),
+  listDetectives: () =>
+    apiClient
+      .get<PaginatedResponse<User> | User[]>('auth/users/detectives/')
+      .then((res) => (Array.isArray(res.data) ? res.data : (res.data as PaginatedResponse<User>).results ?? [])),
   get: (id: number) => apiClient.get<ApiSuccess<User>>(`auth/users/${id}/`).then(unwrap),
   update: (id: number, data: Partial<User> & { role_ids?: number[] }) =>
     apiClient.patch<ApiSuccess<User>>(`auth/users/${id}/`, data).then(unwrap),
