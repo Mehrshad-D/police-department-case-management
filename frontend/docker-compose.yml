@@ -1,0 +1,11 @@
+# Frontend only. Run backend separately (e.g. from project root) or set VITE_API_BASE_URL to your backend URL.
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_BASE_URL=/api
+    restart: unless-stopped

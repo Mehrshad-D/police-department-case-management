@@ -1,0 +1,204 @@
+export interface User {
+  id: number
+  username: string
+  email: string
+  phone: string
+  full_name: string
+  national_id: string
+  is_active: boolean
+  roles: Role[]
+  role_names: string[]
+  date_joined: string
+}
+
+export interface Role {
+  id: number
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ApiTokens {
+  access: string
+  refresh: string
+}
+
+export interface LoginPayload {
+  identifier: string
+  password: string
+}
+
+export interface RegisterPayload {
+  username: string
+  password: string
+  email: string
+  phone: string
+  full_name: string
+  national_id: string
+  role_ids?: number[]
+}
+
+export interface Case {
+  id: number
+  title: string
+  description: string
+  severity: number
+  status: string
+  is_crime_scene_case: boolean
+  created_by: number
+  created_by_username: string
+  assigned_detective: number | null
+  assigned_detective_username: string | null
+  approved_by_captain: number | null
+  created_at: string
+  updated_at: string
+  complainants?: CaseComplainant[]
+  complaint_origin?: Complaint | null
+}
+
+export interface CaseComplainant {
+  id: number
+  case: number
+  user: number
+  user_username: string
+  is_primary: boolean
+  notes: string
+  added_at: string
+}
+
+export interface Complaint {
+  id: number
+  complainant: number
+  complainant_username: string
+  title: string
+  description: string
+  status: string
+  correction_count: number
+  last_correction_message: string
+  case: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Evidence {
+  id: number
+  case: number
+  evidence_type: string
+  title: string
+  description: string
+  date_recorded: string
+  recorder: number | null
+  recorder_username: string | null
+  created_at: string
+  updated_at: string
+  witness_detail?: unknown
+  biological_detail?: unknown
+  vehicle_detail?: unknown
+  id_document_detail?: unknown
+}
+
+export interface EvidenceLink {
+  id: number
+  case: number
+  evidence_from: number
+  evidence_from_title: string
+  evidence_to: number
+  evidence_to_title: string
+  link_type: string
+  created_by: number | null
+  created_at: string
+}
+
+export interface Suspect {
+  id: number
+  case: number
+  case_title: string
+  user: number
+  user_username: string
+  status: string
+  proposed_by_detective: number | null
+  approved_by_supervisor: number | null
+  approved_at: string | null
+  marked_at: string
+  first_pursuit_date: string
+  days_pursued?: number
+  ranking_score?: number
+  reward_rials?: number
+  interrogations?: Interrogation[]
+}
+
+export interface Interrogation {
+  id: number
+  suspect: number
+  detective_probability: number | null
+  supervisor_probability: number | null
+  captain_decision: string
+  captain_decided_by: number | null
+  captain_decided_at: string | null
+  chief_confirmed: boolean
+  chief_confirmed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Trial {
+  id: number
+  case: number
+  case_title: string
+  judge: number | null
+  judge_username: string | null
+  started_at: string
+  closed_at: string | null
+}
+
+export interface Verdict {
+  id: number
+  trial: number
+  title: string
+  description: string
+  punishment_title: string
+  punishment_description: string
+  recorded_at: string
+  recorded_by: number | null
+}
+
+export interface Notification {
+  id: number
+  title: string
+  message: string
+  notification_type: string
+  related_model: string
+  related_id: string
+  read: boolean
+  created_at: string
+}
+
+export interface Statistics {
+  cases_total: number
+  cases_open: number
+  complaints_total: number
+  complaints_pending: number
+  evidence_total: number
+  suspects_total: number
+  suspects_high_priority: number
+  users_total: number
+}
+
+export interface PaginatedResponse<T> {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
+}
+
+export interface ApiError {
+  success: false
+  error: {
+    code: string
+    message: string
+    details?: Record<string, unknown>
+  }
+}
+
+export type ApiSuccess<T> = { success: true; data: T }
