@@ -48,7 +48,6 @@ class Suspect(models.Model):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     marked_at = models.DateTimeField(auto_now_add=True)  # When marked as suspect
-    # For public listing: ranking_score = max(days_pursued) * max(crime_severity); reward = score * 20_000_000
     first_pursuit_date = models.DateTimeField(auto_now_add=True)  # When status became under_pursuit
 
     class Meta:
@@ -68,6 +67,41 @@ class Suspect(models.Model):
         delta = timezone.now() - self.first_pursuit_date
         return max(0, delta.days)
 
+    @property
+    def ranking_score(self):
+        """
+        Ranking Formula: max(days_pursued) * max(crime_severity)
+        Calculates the score across all cases where this user is actively pursued.
+        """
+        severity_weights = {
+            'level_1': 1,
+            'level_2': 2,
+            'level_3': 3,
+            'crisis': 4
+        }
+        
+        # Get all active pursuits for this specific user
+        active_pursuits = Suspect.objects.filter(
+            user=self.user, 
+            status__in=[self.STATUS_UNDER_PURSUIT, self.STATUS_HIGH_PRIORITY]
+        ).select_related('case')
+
+        if not active_pursuits:
+            return 0
+
+        # max(D_i): Maximum days pursued across all their cases
+        max_days = max([p.days_pursued for p in active_pursuits])
+        
+        # max(L_j): Maximum severity across all their cases
+        max_severity = max([severity_weights.get(p.case.severity, 1) for p in active_pursuits])
+
+        return max_days * max_severity
+
+    @property
+    def reward_amount_rials(self):
+        """Reward = score * 20_000_000 Rials"""
+        return self.ranking_score * 20_000_000
+
     def update_high_priority(self):
         """If under_pursuit and >1 month, set high_priority."""
         if self.status == self.STATUS_UNDER_PURSUIT and self.days_pursued >= 31:
@@ -76,10 +110,6 @@ class Suspect(models.Model):
 
 
 class Interrogation(models.Model):
-    """
-    Detective and supervisor each assign guilt probability (1-10).
-    Captain issues final decision. For critical crimes, police chief must confirm.
-    """
     suspect = models.ForeignKey(
         Suspect,
         on_delete=models.CASCADE,
@@ -87,7 +117,7 @@ class Interrogation(models.Model):
     )
     detective_probability = models.PositiveSmallIntegerField(null=True, blank=True)  # 1-10
     supervisor_probability = models.PositiveSmallIntegerField(null=True, blank=True)  # 1-10
-    captain_decision = models.TextField(blank=True)  # Final decision notes
+    captain_decision = models.TextField(blank=True)  
     captain_decided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -96,8 +126,8 @@ class Interrogation(models.Model):
         related_name='interrogation_decisions',
     )
     captain_decided_at = models.DateTimeField(null=True, blank=True)
-    chief_confirmed = models.BooleanField(default=False)  # For critical crimes
-    chief_notes = models.TextField(blank=True)  # Reason for chief rejection
+    chief_confirmed = models.BooleanField(default=False) 
+    chief_notes = models.TextField(blank=True) 
     chief_confirmed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -114,7 +144,6 @@ class Interrogation(models.Model):
 
 
 class ArrestOrder(models.Model):
-    """Sergeant issues arrest/interrogation order; links to suspect."""
     suspect = models.ForeignKey(
         Suspect,
         on_delete=models.CASCADE,
@@ -126,13 +155,12 @@ class ArrestOrder(models.Model):
         null=True,
         related_name='issued_arrest_orders',
     )
-    order_type = models.CharField(max_length=32)  # e.g. 'arrest', 'interrogation'
+    order_type = models.CharField(max_length=32) 
     notes = models.TextField(blank=True)
     issued_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-issued_at']
-
 
 
 

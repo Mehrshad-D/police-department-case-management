@@ -1,6 +1,7 @@
 """
 Suspect proposal, supervisor review, interrogation, arrest order, high-priority listing.
 """
+from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -214,9 +215,11 @@ class SuspectHighPriorityListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]  # Or AllowAny for public; spec says "public listing"
 
     def get_queryset(self):
-        qs = Suspect.objects.filter(status=Suspect.STATUS_HIGH_PRIORITY)
-        for s in Suspect.objects.filter(status=Suspect.STATUS_UNDER_PURSUIT):
-            s.update_high_priority()
+        cutoff_date = timezone.now() - timezone.timedelta(days=31)
+        Suspect.objects.filter(
+            status=Suspect.STATUS_UNDER_PURSUIT,
+            first_pursuit_date__lte=cutoff_date
+        ).update(status=Suspect.STATUS_HIGH_PRIORITY)
         return Suspect.objects.filter(status=Suspect.STATUS_HIGH_PRIORITY).order_by('-first_pursuit_date')
 
 
