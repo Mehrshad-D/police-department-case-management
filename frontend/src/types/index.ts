@@ -6,6 +6,7 @@ export interface User {
   full_name: string
   national_id: string
   is_active: boolean
+  is_staff?: boolean
   roles: Role[]
   role_names: string[]
   date_joined: string

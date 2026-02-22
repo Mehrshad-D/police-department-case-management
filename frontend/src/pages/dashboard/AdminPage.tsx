@@ -25,11 +25,11 @@ export function AdminPage() {
     queryKey: ['users'],
     queryFn: () => usersApi.list(),
   })
-  const { data: rolesData } = useQuery({
+  const { data: rolesData, isLoading: rolesLoading } = useQuery({
     queryKey: ['roles'],
     queryFn: () => rolesApi.list(),
   })
-  const roles = Array.isArray(rolesData) ? rolesData : []
+  const roles = ensureArray(rolesData ?? [])
   const usersList = usersData ? ensureArray(usersData as User[] | { results: User[] }) : []
 
   const updateUser = useMutation({
@@ -120,7 +120,9 @@ export function AdminPage() {
 
       <Modal open={userModalOpen} onClose={() => { setUserModalOpen(false); setSelectedUserId(null); }} title="Assign roles">
         <div className="space-y-4">
-          {roles.map((r) => (
+          {rolesLoading && <p className="text-slate-400 text-sm">Loading roles…</p>}
+          {!rolesLoading && roles.length === 0 && <p className="text-slate-400 text-sm">No roles available. Run <code className="bg-slate-800 px-1 rounded">python manage.py seed_roles</code> in the backend.</p>}
+          {!rolesLoading && roles.map((r) => (
             <label key={r.id} className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"

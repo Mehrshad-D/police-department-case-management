@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useComplaintsList } from '@/hooks/useComplaints'
+import { useComplaintsList, useComplaintCreate } from '@/hooks/useComplaints'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { Modal } from '@/components/ui/Modal'
 import { CardSkeleton } from '@/components/ui/Skeleton'
 import { formatDate } from '@/utils/format'
+import { getApiErrorMessage } from '@/api/client'
 import type { Complaint } from '@/types'
 
 function ensureArray<T>(data: T[] | { results: T[] }): T[] {
@@ -22,7 +25,11 @@ const statusColor: Record<string, string> = {
 
 export function ComplaintsPage() {
   const [search, setSearch] = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newDescription, setNewDescription] = useState('')
   const { data, isLoading, error } = useComplaintsList()
+  const createComplaint = useComplaintCreate()
   const list = data ? ensureArray(data as Complaint[] | { results: Complaint[] }) : []
   const filtered = list.filter(
     (c) =>
@@ -34,8 +41,47 @@ export function ComplaintsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl font-bold text-slate-100">Complaints</h1>
-        <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+        <div className="flex gap-2">
+          <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Button onClick={() => setModalOpen(true)}>New complaint</Button>
+        </div>
       </div>
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Submit complaint">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!newTitle.trim() || !newDescription.trim()) return
+            createComplaint.mutate(
+              { title: newTitle.trim(), description: newDescription.trim() },
+              {
+                onSuccess: () => {
+                  setModalOpen(false)
+                  setNewTitle('')
+                  setNewDescription('')
+                },
+              }
+            )
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">Title</label>
+            <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} required />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">Description</label>
+            <textarea
+              className="w-full rounded-lg bg-slate-800 border border-slate-600 text-slate-100 px-4 py-2.5 min-h-[100px]"
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+              required
+            />
+          </div>
+          {createComplaint.isError && <p className="text-sm text-red-400">{getApiErrorMessage(createComplaint.error)}</p>}
+          <Button type="submit" loading={createComplaint.isPending}>Submit</Button>
+        </form>
+      </Modal>
       {error && <p className="text-red-400">Failed to load complaints.</p>}
       {isLoading && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -51,7 +51,10 @@ export const usersApi = {
 }
 
 export const rolesApi = {
-  list: () => apiClient.get<Role[]>('auth/roles/').then((res) => res.data),
+  list: () =>
+    apiClient
+      .get<Role[] | PaginatedResponse<Role>>('auth/roles/')
+      .then((res) => (Array.isArray(res.data) ? res.data : (res.data as PaginatedResponse<Role>).results ?? [])),
   create: (data: { name: string; description?: string }) =>
     apiClient.post<Role>('auth/roles/', data).then((res) => res.data),
   update: (id: number, data: Partial<Role>) => apiClient.patch<Role>(`auth/roles/${id}/`, data).then((res) => res.data),

@@ -3,8 +3,9 @@ import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
 
 export function Header() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, hasRole } = useAuthStore()
   const navigate = useNavigate()
+  const isAdmin = user && hasRole('System Administrator')
 
   const handleLogout = () => {
     logout()
@@ -26,6 +27,14 @@ export function Header() {
               >
                 Dashboard
               </Link>
+              {isAdmin && (
+                <Link
+                  to="/dashboard/admin"
+                  className="text-sm text-amber-400 hover:text-amber-300 transition-colors font-medium"
+                >
+                  Admin Panel
+                </Link>
+              )}
               <span className="text-sm text-slate-500 hidden sm:inline">
                 {user.full_name || user.username}
               </span>

@@ -70,6 +70,25 @@ export function DashboardOverviewPage() {
         </div>
       )}
 
+      {modules.length === 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/10">
+          <CardContent className="py-6">
+            <h3 className="font-semibold text-amber-200 mb-2">No roles assigned</h3>
+            <p className="text-sm text-slate-300 mb-3">
+              You don&apos;t have any roles yet, so you can&apos;t access modules. To get full access (including the <strong>Admin Panel</strong>):
+            </p>
+            <ol className="text-sm text-slate-400 list-decimal list-inside space-y-1 mb-4">
+              <li>In the backend folder, run: <code className="bg-slate-800 px-1 rounded">./venv/bin/python manage.py assign_superuser_as_admin</code></li>
+              <li>If you haven&apos;t created a superuser yet, run first: <code className="bg-slate-800 px-1 rounded">./venv/bin/python manage.py createsuperuser</code></li>
+              <li>Log out and log in again so your roles refresh.</li>
+            </ol>
+            <p className="text-xs text-slate-500">
+              The <strong>Admin Panel</strong> is at <strong>Dashboard → Admin Panel</strong> (sidebar) once you have the System Administrator role.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <section>
         <h2 className="text-lg font-semibold text-slate-100 mb-4">Modules</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
