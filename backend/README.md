@@ -34,10 +34,13 @@ export DB_PORT=5432
 Run migrations and seed roles:
 
 ```bash
-python manage.py migrate
-python manage.py seed_roles
-python manage.py createsuperuser
+./venv/bin/python manage.py migrate
+./venv/bin/python manage.py seed_roles
+./venv/bin/python manage.py createsuperuser
+./venv/bin/python manage.py assign_superuser_as_admin
 ```
+
+The last command gives your superuser the **System Administrator** role so you can use the app’s **Admin Panel** (user and role management) after logging in.
 
 Run server (port 8000):
 
