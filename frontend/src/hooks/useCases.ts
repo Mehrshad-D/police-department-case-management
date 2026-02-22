@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { casesApi } from '@/api/endpoints'
+import { casesApi, type CrimeSceneCasePayload } from '@/api/endpoints'
 import type { Case } from '@/types'
 
 export function useCasesList(params?: { status?: string; severity?: string }) {
@@ -21,6 +21,14 @@ export function useCaseCreate() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: Partial<Case>) => casesApi.create(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cases'] }),
+  })
+}
+
+export function useCrimeSceneCaseCreate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CrimeSceneCasePayload) => casesApi.createCrimeScene(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cases'] }),
   })
 }

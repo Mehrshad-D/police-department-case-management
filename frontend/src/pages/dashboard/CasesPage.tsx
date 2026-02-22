@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCasesList, useCaseCreate } from '@/hooks/useCases'
+import { useCasesList, useCaseCreate, useCrimeSceneCaseCreate } from '@/hooks/useCases'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -24,11 +24,19 @@ const SEVERITY_OPTIONS = [
 export function CasesPage() {
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [crimeSceneModalOpen, setCrimeSceneModalOpen] = useState(false)
   const [createTitle, setCreateTitle] = useState('')
   const [createDescription, setCreateDescription] = useState('')
   const [createSeverity, setCreateSeverity] = useState(3)
+  const [csTitle, setCsTitle] = useState('')
+  const [csDescription, setCsDescription] = useState('')
+  const [csSceneDate, setCsSceneDate] = useState('')
+  const [csSceneTime, setCsSceneTime] = useState('')
+  const [csLocation, setCsLocation] = useState('')
+  const [csWitnesses, setCsWitnesses] = useState<{ national_id: string; phone: string }[]>([{ national_id: '', phone: '' }])
   const { data, isLoading, error } = useCasesList()
   const createCase = useCaseCreate()
+  const createCrimeSceneCase = useCrimeSceneCaseCreate()
   const casesList = data ? ensureArray(data as Case[] | { results: Case[] }) : []
 
   const filtered = casesList.filter(
@@ -52,7 +60,7 @@ export function CasesPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl font-bold text-slate-100">Cases</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Input
             placeholder="Search cases..."
             value={search}
@@ -60,6 +68,7 @@ export function CasesPage() {
             className="max-w-xs"
           />
           <Button onClick={() => setModalOpen(true)}>Create case</Button>
+          <Button variant="secondary" onClick={() => setCrimeSceneModalOpen(true)}>Create case (crime scene)</Button>
         </div>
       </div>
 
@@ -103,6 +112,107 @@ export function CasesPage() {
           </div>
           {createCase.isError && <p className="text-sm text-red-400">{getApiErrorMessage(createCase.error)}</p>}
           <Button type="submit" loading={createCase.isPending}>Create</Button>
+        </form>
+      </Modal>
+
+      <Modal open={crimeSceneModalOpen} onClose={() => setCrimeSceneModalOpen(false)} title="Create case (crime scene)">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!csTitle.trim() || !csSceneDate || !csSceneTime) return
+            const witnesses = csWitnesses.filter((w) => w.national_id.trim() && w.phone.trim())
+            createCrimeSceneCase.mutate(
+              {
+                title: csTitle.trim(),
+                description: csDescription.trim(),
+                scene_date: csSceneDate,
+                scene_time: csSceneTime.length === 5 ? `${csSceneTime}:00` : csSceneTime,
+                location_description: csLocation.trim(),
+                witnesses: witnesses.length ? witnesses : undefined,
+              },
+              {
+                onSuccess: () => {
+                  setCrimeSceneModalOpen(false)
+                  setCsTitle('')
+                  setCsDescription('')
+                  setCsSceneDate('')
+                  setCsSceneTime('')
+                  setCsLocation('')
+                  setCsWitnesses([{ national_id: '', phone: '' }])
+                },
+              }
+            )
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">Title</label>
+            <Input value={csTitle} onChange={(e) => setCsTitle(e.target.value)} required />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">Description</label>
+            <Input value={csDescription} onChange={(e) => setCsDescription(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Crime date</label>
+              <Input type="date" value={csSceneDate} onChange={(e) => setCsSceneDate(e.target.value)} required />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Crime time</label>
+              <Input type="time" value={csSceneTime} onChange={(e) => setCsSceneTime(e.target.value)} required />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">Location description</label>
+            <Input value={csLocation} onChange={(e) => setCsLocation(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">Witnesses (national ID, phone)</label>
+            {csWitnesses.map((w, i) => (
+              <div key={i} className="flex gap-2 mt-2">
+                <Input
+                  placeholder="National ID"
+                  value={w.national_id}
+                  onChange={(e) => {
+                    const next = [...csWitnesses]
+                    next[i] = { ...next[i], national_id: e.target.value }
+                    setCsWitnesses(next)
+                  }}
+                />
+                <Input
+                  placeholder="Phone"
+                  value={w.phone}
+                  onChange={(e) => {
+                    const next = [...csWitnesses]
+                    next[i] = { ...next[i], phone: e.target.value }
+                    setCsWitnesses(next)
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCsWitnesses((prev) => prev.filter((_, j) => j !== i))}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={() => setCsWitnesses((prev) => [...prev, { national_id: '', phone: '' }])}
+            >
+              + Add witness
+            </Button>
+          </div>
+          {createCrimeSceneCase.isError && (
+            <p className="text-sm text-red-400">{getApiErrorMessage(createCrimeSceneCase.error)}</p>
+          )}
+          <Button type="submit" loading={createCrimeSceneCase.isPending}>Create crime scene case</Button>
         </form>
       </Modal>
 

@@ -72,11 +72,22 @@ export const statisticsApi = {
 }
 
 // Cases
+export interface CrimeSceneCasePayload {
+  title: string
+  description?: string
+  scene_date: string // YYYY-MM-DD
+  scene_time: string // HH:mm
+  location_description?: string
+  witnesses?: { national_id: string; phone: string }[]
+}
+
 export const casesApi = {
   list: (params?: { status?: string; severity?: string }) =>
     apiClient.get<PaginatedResponse<Case> | Case[]>('cases/', { params }).then((res) => res.data),
   get: (id: number) => apiClient.get<Case>('cases/' + id + '/').then((res) => res.data),
   create: (data: Partial<Case>) => apiClient.post<Case>('cases/', data).then((res) => res.data),
+  createCrimeScene: (data: CrimeSceneCasePayload) =>
+    apiClient.post<{ success: true; data: Case }>('cases/crime-scene/', data).then((res) => res.data.data),
   update: (id: number, data: Partial<Case>) => apiClient.patch<Case>(`cases/${id}/`, data).then((res) => res.data),
 }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useEvidenceList } from '@/hooks/useEvidence'
 import { useEvidenceCreate } from '@/hooks/useEvidence'
+import { useCasesList } from '@/hooks/useCases'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -9,6 +10,7 @@ import { CardSkeleton } from '@/components/ui/Skeleton'
 import { formatDate } from '@/utils/format'
 import { getApiErrorMessage } from '@/api/client'
 import type { Evidence } from '@/types'
+import type { Case } from '@/types'
 
 function ensureArray<T>(data: T[] | { results: T[] }): T[] {
   return Array.isArray(data) ? data : (data as { results: T[] }).results ?? []
@@ -21,6 +23,8 @@ export function DocumentsPage() {
   const [description, setDescription] = useState('')
   const [type, setType] = useState<string>('other')
 
+  const { data: casesData } = useCasesList()
+  const casesList = casesData ? ensureArray(casesData as Case[] | { results: Case[] }) : []
   const { data, isLoading, error } = useEvidenceList(caseId ? parseInt(caseId, 10) : null)
   const createEvidence = useEvidenceCreate()
   const list = data ? ensureArray(data as Evidence[] | { results: Evidence[] }) : []
@@ -40,23 +44,43 @@ export function DocumentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl font-bold text-slate-100">Documents & Evidence</h1>
-        <div className="flex gap-2">
-          <Input
-            type="number"
-            placeholder="Case ID"
-            value={caseId}
-            onChange={(e) => setCaseId(e.target.value)}
-            className="w-28"
-          />
-          <Button onClick={() => setModalOpen(true)}>Add evidence</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-slate-400 whitespace-nowrap">Case</label>
+            <select
+              value={caseId}
+              onChange={(e) => setCaseId(e.target.value)}
+              className="rounded-lg bg-slate-800 border border-slate-600 text-slate-200 px-3 py-2 text-sm min-w-[200px]"
+            >
+              <option value="">— Select case —</option>
+              {casesList.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  #{c.id} — {c.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button onClick={() => setModalOpen(true)} disabled={!caseId}>Add evidence</Button>
         </div>
       </div>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add evidence">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Case ID</label>
-            <Input type="number" value={caseId} onChange={(e) => setCaseId(e.target.value)} required />
+            <label className="block text-sm text-slate-400 mb-1">Case</label>
+            <select
+              value={caseId}
+              onChange={(e) => setCaseId(e.target.value)}
+              required
+              className="w-full rounded-lg bg-slate-800 border border-slate-600 text-slate-200 px-4 py-2.5"
+            >
+              <option value="">— Select case —</option>
+              {casesList.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  #{c.id} — {c.title}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm text-slate-400 mb-1">Type</label>
@@ -88,7 +112,7 @@ export function DocumentsPage() {
       </Modal>
 
       {error && <p className="text-red-400">Failed to load evidence.</p>}
-      {!caseId && <Card><CardContent className="py-12 text-center text-slate-500">Enter a case ID to list evidence.</CardContent></Card>}
+      {!caseId && <Card><CardContent className="py-12 text-center text-slate-500">Select a case above to list evidence or add new evidence.</CardContent></Card>}
       {caseId && isLoading && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (<CardSkeleton key={i} />))}

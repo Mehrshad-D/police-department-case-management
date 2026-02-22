@@ -22,6 +22,7 @@ export function CaseDetailPage() {
   const caseId = id ? parseInt(id, 10) : null
   const { data: caseData, isLoading, error } = useCase(caseId)
   const [selectedDetectiveId, setSelectedDetectiveId] = useState<number | ''>('')
+  const [selectedSeverity, setSelectedSeverity] = useState<number>(3)
 
   const { data: detectivesData } = useQuery({
     queryKey: ['detectives'],
@@ -34,6 +35,9 @@ export function CaseDetailPage() {
     if (caseData?.assigned_detective != null) setSelectedDetectiveId(caseData.assigned_detective)
     else setSelectedDetectiveId('')
   }, [caseData?.assigned_detective])
+  useEffect(() => {
+    if (caseData?.severity != null) setSelectedSeverity(caseData.severity)
+  }, [caseData?.severity])
 
   if (error || (caseId && !isLoading && !caseData)) {
     return (
@@ -82,6 +86,31 @@ export function CaseDetailPage() {
             <div><dt className="text-slate-500">Assigned detective</dt><dd>{caseData.assigned_detective_username ?? '—'}</dd></div>
             <div><dt className="text-slate-500">Created</dt><dd>{formatDate(caseData.created_at)}</dd></div>
           </dl>
+
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <label className="block text-sm font-medium text-slate-400 mb-2">Crime level (severity)</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={selectedSeverity}
+                onChange={(e) => setSelectedSeverity(Number(e.target.value))}
+                className="rounded-md border border-slate-600 bg-slate-800 text-slate-200 px-3 py-2 text-sm min-w-[180px]"
+              >
+                <option value={3}>{SEVERITY_MAP[3]}</option>
+                <option value={2}>{SEVERITY_MAP[2]}</option>
+                <option value={1}>{SEVERITY_MAP[1]}</option>
+                <option value={0}>{SEVERITY_MAP[0]}</option>
+              </select>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => updateCase.mutate({ severity: selectedSeverity })}
+                loading={updateCase.isPending}
+                disabled={caseId == null || selectedSeverity === caseData.severity}
+              >
+                Update severity
+              </Button>
+            </div>
+          </div>
 
           <div className="mt-4 pt-4 border-t border-slate-700">
             <label className="block text-sm font-medium text-slate-400 mb-2">Assign detective</label>

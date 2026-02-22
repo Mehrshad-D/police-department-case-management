@@ -54,3 +54,15 @@ export function useComplaintOfficerReview() {
     },
   })
 }
+
+export function useComplaintCorrect() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { title?: string; description?: string } }) =>
+      complaintsApi.correct(id, data),
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ['complaints'] })
+      qc.invalidateQueries({ queryKey: ['complaint', v.id] })
+    },
+  })
+}

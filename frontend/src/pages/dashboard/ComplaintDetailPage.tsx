@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useComplaint } from '@/hooks/useComplaints'
-import { useComplaintTraineeReview, useComplaintOfficerReview } from '@/hooks/useComplaints'
+import { useComplaintTraineeReview, useComplaintOfficerReview, useComplaintCorrect } from '@/hooks/useComplaints'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { formatDate } from '@/utils/format'
 import { getApiErrorMessage } from '@/api/client'
@@ -14,6 +16,9 @@ export function ComplaintDetailPage() {
   const { data: complaint, isLoading, error } = useComplaint(complaintId)
   const traineeReview = useComplaintTraineeReview()
   const officerReview = useComplaintOfficerReview()
+  const correctComplaint = useComplaintCorrect()
+  const [correctTitle, setCorrectTitle] = useState('')
+  const [correctDescription, setCorrectDescription] = useState('')
 
   if (error || (complaintId && !isLoading && !complaint)) {
     return (
@@ -30,6 +35,9 @@ export function ComplaintDetailPage() {
 
   const canTraineeReview = complaint.status === 'pending_trainee'
   const canOfficerReview = complaint.status === 'pending_officer'
+  const needsCorrection = complaint.status === 'correction_needed'
+  const canResubmit = needsCorrection && complaint.correction_count < 3
+  const rejectedPermanently = complaint.status === 'rejected' && complaint.correction_count >= 3
 
   return (
     <div className="space-y-6">
@@ -44,7 +52,47 @@ export function ComplaintDetailPage() {
           {complaint.last_correction_message && (
             <p className="text-amber-400 text-sm">Correction message: {complaint.last_correction_message}</p>
           )}
-          <p className="text-xs text-slate-600">Created {formatDate(complaint.created_at)} · Corrections: {complaint.correction_count}</p>
+          <p className="text-xs text-slate-600">Created {formatDate(complaint.created_at)} · Corrections: {complaint.correction_count}/3</p>
+          {rejectedPermanently && (
+            <p className="text-red-400 text-sm font-medium">This complaint was rejected after 3 correction attempts and cannot be resubmitted.</p>
+          )}
+
+          {canResubmit && (
+            <div className="pt-4 border-t border-slate-700 space-y-3">
+              <h3 className="text-sm font-medium text-slate-300">Update and resubmit</h3>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Title</label>
+                <Input
+                  value={correctTitle || complaint.title}
+                  onChange={(e) => setCorrectTitle(e.target.value)}
+                  placeholder="Complaint title"
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Description</label>
+                <Input
+                  value={correctDescription || complaint.description}
+                  onChange={(e) => setCorrectDescription(e.target.value)}
+                  placeholder="Description"
+                  className="w-full"
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={() => correctComplaint.mutate(
+                  { id: complaint.id, data: { title: correctTitle || complaint.title, description: correctDescription || complaint.description } },
+                  { onSuccess: () => { setCorrectTitle(''); setCorrectDescription('') } }
+                )}
+                loading={correctComplaint.isPending}
+              >
+                Resubmit for review
+              </Button>
+              {correctComplaint.isError && (
+                <p className="text-sm text-red-400">{getApiErrorMessage(correctComplaint.error)}</p>
+              )}
+            </div>
+          )}
 
           {canTraineeReview && (
             <div className="flex gap-2 pt-4 border-t border-slate-700">
