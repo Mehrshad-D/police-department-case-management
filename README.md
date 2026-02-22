@@ -28,7 +28,15 @@ Full-stack project: **backend** (Django REST Framework) and **frontend** (React 
    npm run dev
    ```
 
-3. Open **http://localhost:3000**. The frontend is configured to call the API at **http://localhost:8000/api** in development.
+3. Open **http://localhost:3000**. The frontend calls the API at **http://localhost:8000/api** in development.
+
+4. **First login:** If you see “No roles assigned” on the dashboard, run in the backend folder:
+   ```bash
+   ./venv/bin/python manage.py assign_superuser_as_admin
+   ```
+   then log out and log in again. You will then see the **Admin Panel** (header and sidebar) and can assign roles to other users.
+
+**Full testing scenario:** See [SCENARIO.md](SCENARIO.md) for step-by-step case creation, complaints, evidence, and Admin Panel usage.
 
 ## Notes
 
