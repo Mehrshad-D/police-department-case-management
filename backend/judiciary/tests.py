@@ -4,7 +4,7 @@ from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
 from accounts.models import Role
 from cases.models import Case
-from judiciary.models import Trial, Verdict
+from judiciary.models import Trial
 
 User = get_user_model()
 
