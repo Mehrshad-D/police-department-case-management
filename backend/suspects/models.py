@@ -74,6 +74,13 @@ class Suspect(models.Model):
             self.status = self.STATUS_HIGH_PRIORITY
             self.save(update_fields=['status'])
 
+    def mark_released(self):
+        self.status = self.STATUS_RELEASED
+        self.save(update_fields=['status'])
+
+    def mark_convicted(self):
+        self.status = self.STATUS_CONVICTED
+        self.save(update_fields=['status'])
 
 class Interrogation(models.Model):
     """
