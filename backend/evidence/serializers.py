@@ -1,21 +1,53 @@
 """
-Evidence serializers: base + witness, biological, vehicle, ID document, other.
+Evidence serializers: base + witness (transcript, media), biological (images, verification), vehicle, ID doc, other.
+Validation: file types/sizes, vehicle constraint, biological >=1 image.
 """
 from rest_framework import serializers
+from django.core.files.uploadedfile import UploadedFile
+
 from cases.models import Case
 from .models import (
     Evidence,
     WitnessEvidence,
+    WitnessMedia,
     BiologicalEvidence,
     BiologicalEvidenceImage,
     VehicleEvidence,
     IDDocumentEvidence,
     EvidenceLink,
+    EVIDENCE_FILE_MAX_SIZE,
+    ALLOWED_IMAGE_TYPES,
+    ALLOWED_VIDEO_TYPES,
+    ALLOWED_AUDIO_TYPES,
 )
+
+
+def validate_file_size(file: UploadedFile, max_size: int = EVIDENCE_FILE_MAX_SIZE):
+    if file.size > max_size:
+        raise serializers.ValidationError(
+            f'File size must not exceed {max_size // (1024 * 1024)} MB.'
+        )
+
+
+def validate_witness_media_type(file: UploadedFile, media_type: str):
+    content_type = getattr(file, 'content_type', '') or ''
+    if media_type == 'image' and content_type not in ALLOWED_IMAGE_TYPES:
+        raise serializers.ValidationError(
+            f'Image type not allowed. Allowed: {", ".join(ALLOWED_IMAGE_TYPES)}'
+        )
+    if media_type == 'video' and content_type not in ALLOWED_VIDEO_TYPES:
+        raise serializers.ValidationError(
+            f'Video type not allowed. Allowed: {", ".join(ALLOWED_VIDEO_TYPES)}'
+        )
+    if media_type == 'audio' and content_type not in ALLOWED_AUDIO_TYPES:
+        raise serializers.ValidationError(
+            f'Audio type not allowed. Allowed: {", ".join(ALLOWED_AUDIO_TYPES)}'
+        )
 
 
 class EvidenceListSerializer(serializers.ModelSerializer):
     recorder_username = serializers.CharField(source='recorder.username', read_only=True)
+    date_recorded = serializers.DateTimeField(source='created_at', read_only=True)
 
     class Meta:
         model = Evidence
@@ -25,10 +57,18 @@ class EvidenceListSerializer(serializers.ModelSerializer):
         ]
 
 
+class WitnessMediaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WitnessMedia
+        fields = ['id', 'file', 'media_type', 'uploaded_at']
+
+
 class WitnessEvidenceSerializer(serializers.ModelSerializer):
+    media_files = WitnessMediaSerializer(many=True, read_only=True)
+
     class Meta:
         model = WitnessEvidence
-        fields = ['statement', 'media_file', 'media_url']
+        fields = ['transcript', 'statement', 'media_file', 'media_url', 'media_files']
 
 
 class BiologicalEvidenceImageSerializer(serializers.ModelSerializer):
@@ -42,32 +82,40 @@ class BiologicalEvidenceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BiologicalEvidence
-        fields = ['lab_results', 'validity_status', 'reviewed_by', 'reviewed_at', 'images']
+        fields = [
+            'verification_status', 'verification_result',
+            'reviewed_by', 'reviewed_at', 'images',
+        ]
 
 
 class VehicleEvidenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = VehicleEvidence
-        fields = ['plate_number', 'serial_number', 'make_model']
+        fields = ['model', 'color', 'license_plate', 'serial_number']
 
     def validate(self, data):
-        plate = data.get('plate_number', '')
-        serial = data.get('serial_number', '')
+        plate = (data.get('license_plate') or '').strip()
+        serial = (data.get('serial_number') or '').strip()
         if plate and serial:
-            raise serializers.ValidationError('Provide either plate_number or serial_number, not both.')
+            raise serializers.ValidationError(
+                'Provide exactly one of license_plate or serial_number, not both.'
+            )
         if not plate and not serial:
-            raise serializers.ValidationError('Provide either plate_number or serial_number.')
+            raise serializers.ValidationError(
+                'Provide exactly one of license_plate or serial_number.'
+            )
         return data
 
 
 class IDDocumentEvidenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = IDDocumentEvidence
-        fields = ['attributes']
+        fields = ['owner_full_name', 'attributes']
 
 
 class EvidenceDetailSerializer(serializers.ModelSerializer):
     recorder_username = serializers.CharField(source='recorder.username', read_only=True)
+    date_recorded = serializers.DateTimeField(source='created_at', read_only=True)
     witness_detail = WitnessEvidenceSerializer(read_only=True, allow_null=True)
     biological_detail = BiologicalEvidenceSerializer(read_only=True, allow_null=True)
     vehicle_detail = VehicleEvidenceSerializer(read_only=True, allow_null=True)
@@ -84,30 +132,87 @@ class EvidenceDetailSerializer(serializers.ModelSerializer):
 
 
 class EvidenceCreateSerializer(serializers.Serializer):
-    """Create evidence with type-specific payload."""
+    """Create evidence with type-specific payload. Validates file types/sizes and constraints."""
     case = serializers.PrimaryKeyRelatedField(queryset=Case.objects.all())
     evidence_type = serializers.ChoiceField(choices=Evidence.TYPE_CHOICES)
-    title = serializers.CharField()
-    description = serializers.CharField(required=False, allow_blank=True)
-    # Type-specific
-    statement = serializers.CharField(required=False, allow_blank=True)
+    title = serializers.CharField(max_length=255)
+    description = serializers.CharField(required=False, allow_blank=True, default='')
+
+    # Witness
+    transcript = serializers.CharField(required=False, allow_blank=True, default='')
     media_file = serializers.FileField(required=False, allow_null=True)
     media_url = serializers.URLField(required=False, allow_blank=True)
-    lab_results = serializers.CharField(required=False, allow_blank=True)
-    plate_number = serializers.CharField(required=False, allow_blank=True)
-    serial_number = serializers.CharField(required=False, allow_blank=True)
-    make_model = serializers.CharField(required=False, allow_blank=True)
-    attributes = serializers.JSONField(required=False)
+    media_files = serializers.ListField(
+        child=serializers.DictField(child=serializers.CharField()),
+        required=False,
+        default=list,
+    )  # [{"file": <upload>, "media_type": "image"|"video"|"audio"}]
+
+    # Biological: images required (>=1) — passed via request.FILES.getlist('images')
+    images = serializers.ListField(
+        child=serializers.ImageField(allow_empty_file=False),
+        required=False,
+        default=list,
+    )
+
+    # Vehicle: exactly one of license_plate or serial_number
+    model = serializers.CharField(required=False, allow_blank=True, default='')
+    color = serializers.CharField(required=False, allow_blank=True, default='')
+    license_plate = serializers.CharField(required=False, allow_blank=True, default='')
+    serial_number = serializers.CharField(required=False, allow_blank=True, default='')
+
+    # ID Document
+    owner_full_name = serializers.CharField(required=False, allow_blank=True, default='')
+    attributes = serializers.JSONField(required=False, default=dict)
 
     def validate_evidence_type(self, value):
-        if value == Evidence.TYPE_VEHICLE:
-            plate = self.initial_data.get('plate_number', '')
-            serial = self.initial_data.get('serial_number', '')
-            if plate and serial:
-                raise serializers.ValidationError('Provide either plate_number or serial_number, not both.')
-            if not plate and not serial:
-                raise serializers.ValidationError('Provide either plate_number or serial_number.')
         return value
+
+    def validate(self, data):
+        request = self.context.get('request')
+        if request and request.FILES:
+            # Multipart: multiple images under key 'images'
+            data = dict(data)
+            data['images'] = request.FILES.getlist('images') or data.get('images') or []
+            # Witness media_files: list of {file, media_type} from request
+            if data.get('evidence_type') == Evidence.TYPE_WITNESS:
+                media_files = []
+                for i in range(100):
+                    f = request.FILES.get(f'media_files_{i}')
+                    mt = request.data.get(f'media_files_{i}_type', 'image')
+                    if f:
+                        media_files.append({'file': f, 'media_type': mt})
+                if media_files:
+                    data['media_files'] = media_files
+        evidence_type = data['evidence_type']
+        if evidence_type == Evidence.TYPE_BIOLOGICAL:
+            images = data.get('images') or []
+            if not images:
+                raise serializers.ValidationError(
+                    {'images': 'At least one image is required for biological evidence.'}
+                )
+            for img in images:
+                validate_file_size(img)
+        if evidence_type == Evidence.TYPE_VEHICLE:
+            plate = (data.get('license_plate') or '').strip()
+            serial = (data.get('serial_number') or '').strip()
+            if plate and serial:
+                raise serializers.ValidationError(
+                    'Provide exactly one of license_plate or serial_number, not both.'
+                )
+            if not plate and not serial:
+                raise serializers.ValidationError(
+                    'Provide exactly one of license_plate or serial_number.'
+                )
+        if evidence_type == Evidence.TYPE_WITNESS:
+            if data.get('media_file'):
+                validate_file_size(data['media_file'])
+            for item in data.get('media_files') or []:
+                f = item.get('file')
+                if f:
+                    validate_file_size(f)
+                    validate_witness_media_type(f, item.get('media_type') or 'image')
+        return data
 
     def create(self, validated_data):
         case = validated_data['case']
@@ -115,6 +220,7 @@ class EvidenceCreateSerializer(serializers.Serializer):
         title = validated_data['title']
         description = validated_data.get('description', '')
         recorder = self.context['request'].user
+
         evidence = Evidence.objects.create(
             case=case,
             evidence_type=evidence_type,
@@ -122,30 +228,42 @@ class EvidenceCreateSerializer(serializers.Serializer):
             description=description,
             recorder=recorder,
         )
+
         if evidence_type == Evidence.TYPE_WITNESS:
-            WitnessEvidence.objects.create(
+            we = WitnessEvidence.objects.create(
                 evidence=evidence,
-                statement=validated_data.get('statement', ''),
+                transcript=validated_data.get('transcript', ''),
+                statement='',
                 media_file=validated_data.get('media_file'),
                 media_url=validated_data.get('media_url', ''),
             )
+            for item in validated_data.get('media_files') or []:
+                f = item.get('file')
+                mt = item.get('media_type') or 'image'
+                if f:
+                    WitnessMedia.objects.create(witness_evidence=we, file=f, media_type=mt)
+
         elif evidence_type == Evidence.TYPE_BIOLOGICAL:
-            BiologicalEvidence.objects.create(
-                evidence=evidence,
-                lab_results=validated_data.get('lab_results', ''),
-            )
+            bio = BiologicalEvidence.objects.create(evidence=evidence)
+            for img in validated_data.get('images') or []:
+                BiologicalEvidenceImage.objects.create(biological_evidence=bio, image=img)
+
         elif evidence_type == Evidence.TYPE_VEHICLE:
             VehicleEvidence.objects.create(
                 evidence=evidence,
-                plate_number=validated_data.get('plate_number', ''),
+                model=validated_data.get('model', ''),
+                color=validated_data.get('color', ''),
+                license_plate=validated_data.get('license_plate', ''),
                 serial_number=validated_data.get('serial_number', ''),
-                make_model=validated_data.get('make_model', ''),
             )
+
         elif evidence_type == Evidence.TYPE_ID_DOCUMENT:
             IDDocumentEvidence.objects.create(
                 evidence=evidence,
+                owner_full_name=validated_data.get('owner_full_name', ''),
                 attributes=validated_data.get('attributes', {}),
             )
+
         return evidence
 
 
