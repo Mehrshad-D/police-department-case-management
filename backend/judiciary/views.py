@@ -26,6 +26,7 @@ class TrialListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = TrialSerializer
     queryset = Trial.objects.all().order_by('-started_at')
+    pagination_class = None  # Return full list so judge always sees all trials
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -78,4 +79,14 @@ class VerdictListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         verdict = serializer.save(recorded_by=self.request.user)
-        log_audit(self.request.user, 'create', 'Verdict', verdict.pk, verdict.title)
+        log_audit(self.request.user, 'create', 'Verdict', verdict.pk, verdict.title or verdict.verdict_type)
+        trial = verdict.trial
+        from django.utils import timezone
+        trial.closed_at = timezone.now()
+        trial.save(update_fields=['closed_at'])
+        if trial.suspect_id:
+            from suspects.models import Suspect
+            if verdict.verdict_type == Verdict.VERDICT_GUILTY:
+                trial.suspect.mark_convicted()
+            else:
+                trial.suspect.mark_released()

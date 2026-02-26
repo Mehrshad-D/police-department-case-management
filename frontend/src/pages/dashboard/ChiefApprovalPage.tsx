@@ -13,6 +13,7 @@ export function ChiefApprovalPage() {
   const [comment, setComment] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [status, setStatus] = useState<'approved' | 'rejected'>('approved')
+  const [successReferred, setSuccessReferred] = useState(false)
 
   const { data: decisionsData } = useQuery({
     queryKey: ['captain-decisions'],
@@ -27,9 +28,14 @@ export function ChiefApprovalPage() {
   const submitApproval = useMutation({
     mutationFn: ({ id, status, comment }: { id: number; status: 'approved' | 'rejected'; comment?: string }) =>
       chiefApprovalApi.create(id, { status, comment }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['captain-decisions'] })
+      qc.invalidateQueries({ queryKey: ['trials'] })
       setSelectedId(null)
+      if (variables.status === 'approved') {
+        setSuccessReferred(true)
+        setTimeout(() => setSuccessReferred(false), 8000)
+      }
     },
   })
 
@@ -37,6 +43,15 @@ export function ChiefApprovalPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-slate-100">Chief Approval</h1>
       <p className="text-slate-400">CRITICAL severity cases require your approval of the captain decision.</p>
+      {successReferred && (
+        <Card className="border-emerald-600 bg-emerald-950/40">
+          <CardContent className="py-4">
+            <p className="text-emerald-200">
+              <strong>Approval applied.</strong> The case has been referred to court. A trial has been created and will appear in the <strong>Trials</strong> list for the Judge.
+            </p>
+          </CardContent>
+        </Card>
+      )}
       {pendingChief.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-slate-500">No captain decisions pending chief approval.</CardContent>
@@ -72,6 +87,7 @@ export function ChiefApprovalPage() {
                       size="sm"
                       onClick={() => submitApproval.mutate({ id: d.id, status, comment })}
                       loading={submitApproval.isPending}
+                      disabled={submitApproval.isPending}
                     >
                       Submit
                     </Button>

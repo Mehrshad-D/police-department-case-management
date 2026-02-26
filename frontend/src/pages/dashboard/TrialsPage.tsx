@@ -27,11 +27,14 @@ export function TrialsPage() {
   const [verdictTitle, setVerdictTitle] = useState('')
   const [verdictDescription, setVerdictDescription] = useState('')
 
-  const { data: trialsData } = useQuery({
+  const isJudge = user?.role_names?.some((r) => r.toLowerCase() === 'judge')
+  const { data: trialsData, error: trialsError, isLoading: trialsLoading } = useQuery({
     queryKey: ['trials'],
     queryFn: () => trialsApi.list(),
+    enabled: !!isJudge,
+    refetchOnWindowFocus: true,
   })
-  const trials = trialsData ? ensureArray(trialsData as Trial[] | { results: Trial[] }) : []
+  const trials = trialsData != null ? ensureArray(trialsData as Trial[] | { results: Trial[] }) : []
 
   const { data: fullDetail, isLoading: loadingFull } = useQuery({
     queryKey: ['trial-full', trialId],
@@ -54,8 +57,6 @@ export function TrialsPage() {
       navigate('/dashboard/trials')
     },
   })
-
-  const isJudge = user?.role_names?.some((r) => r.toLowerCase() === 'judge')
 
   if (trialId != null && isJudge) {
     if (loadingFull || (fullDetail == null && trialId != null)) {
@@ -196,8 +197,18 @@ export function TrialsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-slate-100">Trials</h1>
-      <p className="text-slate-400">List of cases referred to judiciary. Judges can open a trial to view full case data and record verdict.</p>
-      {trials.length === 0 && <Card><CardContent className="py-12 text-center text-slate-500">No trials.</CardContent></Card>}
+      <p className="text-slate-400">Cases referred to court (after captain decision GUILTY). Open a trial to view full case data and record verdict.</p>
+      {!isJudge && (
+        <Card><CardContent className="py-12 text-center text-slate-500">Only users with the Judge role can view and manage trials.</CardContent></Card>
+      )}
+      {isJudge && trialsLoading && <Skeleton className="h-32 w-full" />}
+      {isJudge && trialsError && (
+        <p className="text-red-400">Failed to load trials. You may need the Judge role.</p>
+      )}
+      {isJudge && !trialsLoading && trials.length === 0 && !trialsError && (
+        <Card><CardContent className="py-12 text-center text-slate-500">No trials yet. Trials are created when a captain decides GUILTY (and chief approves for CRITICAL cases). After a captain marks a suspect GUILTY, the case is referred to court and appears here.</CardContent></Card>
+      )}
+      {isJudge && trials.length > 0 && (
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {trials.map((t) => (
           <Card key={t.id}>
@@ -220,6 +231,7 @@ export function TrialsPage() {
           </Card>
         ))}
       </div>
+      )}
     </div>
   )
 }
