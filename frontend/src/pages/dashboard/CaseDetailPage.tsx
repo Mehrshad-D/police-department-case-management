@@ -44,11 +44,10 @@ export function CaseDetailPage() {
   const detectives = Array.isArray(detectivesData) ? detectivesData : []
   const { data: suspectsData } = useSuspectsList(caseId != null ? { case: caseId } : undefined)
   const suspects = suspectsData ? ensureArray(suspectsData as Suspect[] | { results: Suspect[] }) : []
-  const { data: usersData } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => usersApi.list({ is_active: true }),
+  const { data: usersList = [] } = useQuery({
+    queryKey: ['users', 'suspect-candidates'],
+    queryFn: () => usersApi.listSuspectCandidates(),
   })
-  const usersList = Array.isArray(usersData) ? usersData : (usersData as { results?: unknown[] })?.results ?? []
 
   const updateCase = useCaseUpdate(caseId ?? 0)
   const submitToSergeant = useCaseSubmitSuspectsToSergeant(caseId ?? 0)

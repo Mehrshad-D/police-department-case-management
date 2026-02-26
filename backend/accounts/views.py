@@ -78,6 +78,15 @@ class DetectivesListView(generics.ListAPIView):
         return User.objects.filter(roles__name__iexact='Detective').distinct().order_by('username')
 
 
+class SuspectCandidatesListView(generics.ListAPIView):
+    """List active users for the 'add suspect' dropdown. Detective/Officer+ can call (not admin-only)."""
+    serializer_class = UserListSerializer
+    permission_classes = [IsAuthenticated, IsOfficerOrAbove]
+
+    def get_queryset(self):
+        return User.objects.filter(is_active=True).order_by('username')
+
+
 class UserDetailView(generics.RetrieveUpdateAPIView):
     """Retrieve/update user. Only System Administrator can update users and assign roles."""
     queryset = User.objects.all()
