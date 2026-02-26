@@ -1,12 +1,12 @@
 # Police Department Case Management System — Backend
 
-Django REST Framework backend for the digitized police operations system (Checkpoint 1).
+Django REST Framework API for the digitized police operations system: cases, complaints, evidence, suspects, interrogations, captain/chief decisions, trials & verdicts, tips & rewards, and payments.
 
 ## Tech Stack
 
-- **Backend:** Django 4.2 + Django REST Framework
+- **Framework:** Django 4.2 + Django REST Framework
 - **Auth:** JWT (Simple JWT)
-- **API docs:** drf-spectacular (OpenAPI 3 / Swagger)
+- **API docs:** drf-spectacular (OpenAPI 3 / Swagger, ReDoc)
 - **Database:** SQLite (default), PostgreSQL (optional via env)
 
 ## Setup
@@ -15,21 +15,11 @@ From the **backend** directory:
 
 ```bash
 cd backend
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Optional environment:
-
-```bash
-export DB_ENGINE=postgresql
-export DB_NAME=policedb
-export DB_USER=postgres
-export DB_PASSWORD=yourpassword
-export DB_HOST=localhost
-export DB_PORT=5432
-```
 
 Run migrations and seed roles:
 
@@ -48,7 +38,7 @@ Run server (port 8000):
 # Option A: use the run script (uses venv’s Python automatically)
 ./run.sh
 
-# Option B: activate venv then run (use venv’s python explicitly if `python` is not found)
+# Option B: activate venv then run
 source venv/bin/activate
 ./venv/bin/python manage.py runserver 8000
 ```
