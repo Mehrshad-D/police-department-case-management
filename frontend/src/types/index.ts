@@ -151,6 +151,7 @@ export interface MostWantedItem {
 export interface Interrogation {
   id: number
   suspect: number
+  case_id?: number
   detective_probability: number | null
   supervisor_probability: number | null
   captain_decision: string
@@ -158,8 +159,28 @@ export interface Interrogation {
   captain_decided_at: string | null
   chief_confirmed: boolean
   chief_confirmed_at: string | null
+  notes?: string
   created_at: string
   updated_at: string
+}
+
+export interface CaptainDecision {
+  id: number
+  suspect: number
+  case: number
+  final_decision: 'guilty' | 'not_guilty'
+  reasoning: string
+  decided_by: number | null
+  created_at: string
+}
+
+export interface ChiefApproval {
+  id: number
+  captain_decision: number
+  status: 'approved' | 'rejected'
+  comment: string
+  approved_by: number | null
+  created_at: string
 }
 
 export interface Trial {
@@ -197,6 +218,30 @@ export interface TrialFullDetail {
   complainants: CaseComplainant[]
   suspects: Suspect[]
   personnel: { id: number; username: string; full_name: string; role_names: string[] }[]
+}
+
+export interface TrialFullDataByCase {
+  case_data: Case
+  evidence_items: Evidence[]
+  crime_scene_report: unknown | null
+  complainants: CaseComplainant[]
+  suspects: Suspect[]
+  interrogations: Interrogation[]
+  captain_decisions: CaptainDecision[]
+  chief_approvals: ChiefApproval[]
+  personnel: { id: number; username: string; full_name: string; role_names: string[] }[]
+  trial: Trial | null
+  verdict: Verdict | null
+}
+
+export interface RewardVerifyResponse {
+  reward: Reward
+  user_info: { id: number; username: string; full_name: string; national_id: string } | null
+  reward_amount: number
+  case_info: { id: number; title: string } | null
+  suspect_info: { id: number; case_id: number } | null
+  payment_status: 'paid' | 'unpaid'
+  payment_record: { id: number; amount_rials: number; paid_at: string; officer_id: number } | null
 }
 
 export interface Notification {

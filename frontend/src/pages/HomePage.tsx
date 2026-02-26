@@ -50,6 +50,11 @@ export function HomePage() {
                 Most Wanted
               </Button>
             </Link>
+            <Link to="/submit-tip">
+              <Button variant="outline" size="lg">
+                Submit a tip
+              </Button>
+            </Link>
           </motion.div>
         </div>
       </section>

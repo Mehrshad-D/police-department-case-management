@@ -32,6 +32,13 @@ class Tip(models.Model):
         blank=True,
         related_name='tips',
     )
+    suspect = models.ForeignKey(
+        'suspects.Suspect',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='tips',
+    )
     title = models.CharField(max_length=255)
     description = models.TextField()
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_PENDING)
@@ -89,3 +96,23 @@ class Reward(models.Model):
         if not self.unique_code:
             self.unique_code = str(uuid.uuid4()).replace('-', '')[:24]
         super().save(*args, **kwargs)
+
+
+class RewardPayment(models.Model):
+    """Payment record when police marks reward as paid at office."""
+    reward = models.ForeignKey(
+        Reward,
+        on_delete=models.CASCADE,
+        related_name='payments',
+    )
+    officer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='reward_payments_made',
+    )
+    amount_rials = models.BigIntegerField()
+    paid_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-paid_at']

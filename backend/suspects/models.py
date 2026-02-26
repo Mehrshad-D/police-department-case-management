@@ -134,6 +134,7 @@ class Interrogation(models.Model):
         related_name='interrogation_chief_confirmations',
     )
     chief_confirmed_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -160,3 +161,64 @@ class ArrestOrder(models.Model):
 
     class Meta:
         ordering = ['-issued_at']
+
+
+class CaptainDecision(models.Model):
+    """Captain final decision after interrogation scores and evidence review. CRITICAL cases require ChiefApproval."""
+    DECISION_GUILTY = 'guilty'
+    DECISION_NOT_GUILTY = 'not_guilty'
+    DECISION_CHOICES = [
+        (DECISION_GUILTY, 'Guilty'),
+        (DECISION_NOT_GUILTY, 'Not Guilty'),
+    ]
+
+    suspect = models.ForeignKey(
+        Suspect,
+        on_delete=models.CASCADE,
+        related_name='captain_decisions',
+    )
+    case = models.ForeignKey(
+        'cases.Case',
+        on_delete=models.CASCADE,
+        related_name='captain_decisions',
+    )
+    final_decision = models.CharField(max_length=16, choices=DECISION_CHOICES)
+    reasoning = models.TextField(blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='captain_decisions_made',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class ChiefApproval(models.Model):
+    """Chief approval/rejection for captain decision when crime severity is CRITICAL."""
+    STATUS_APPROVED = 'approved'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CHOICES = [
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_REJECTED, 'Rejected'),
+    ]
+
+    captain_decision = models.OneToOneField(
+        CaptainDecision,
+        on_delete=models.CASCADE,
+        related_name='chief_approval',
+    )
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES)
+    comment = models.TextField(blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='chief_approvals_given',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
