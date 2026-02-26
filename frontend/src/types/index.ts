@@ -117,16 +117,35 @@ export interface Suspect {
   case_title: string
   user: number
   user_username: string
+  user_full_name?: string
+  user_national_id?: string
   status: string
+  rejection_message?: string
   proposed_by_detective: number | null
   approved_by_supervisor: number | null
   approved_at: string | null
   marked_at: string
   first_pursuit_date: string
   days_pursued?: number
+  crime_degree?: number
   ranking_score?: number
   reward_rials?: number
   interrogations?: Interrogation[]
+}
+
+export interface MostWantedItem {
+  id: number
+  user: number
+  user_username: string
+  user_full_name: string
+  photo: string | null
+  case: number
+  case_title: string
+  days_under_investigation: number
+  crime_degree: number
+  ranking_score: number
+  reward_rials: number
+  marked_at: string
 }
 
 export interface Interrogation {
@@ -156,12 +175,28 @@ export interface Trial {
 export interface Verdict {
   id: number
   trial: number
+  verdict_type: 'guilty' | 'innocent'
   title: string
   description: string
   punishment_title: string
   punishment_description: string
   recorded_at: string
   recorded_by: number | null
+}
+
+export interface TrialFullDetail {
+  id: number
+  case: number
+  judge: number | null
+  judge_username: string | null
+  started_at: string
+  closed_at: string | null
+  case_data: Case
+  evidence_items: Evidence[]
+  crime_scene_report: unknown | null
+  complainants: CaseComplainant[]
+  suspects: Suspect[]
+  personnel: { id: number; username: string; full_name: string; role_names: string[] }[]
 }
 
 export interface Notification {
@@ -184,6 +219,32 @@ export interface Statistics {
   suspects_total: number
   suspects_high_priority: number
   users_total: number
+}
+
+export interface Tip {
+  id: number
+  submitter: number
+  submitter_username: string
+  case: number | null
+  title: string
+  description: string
+  status: string
+  reviewed_by_officer: number | null
+  reviewed_by_detective: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Reward {
+  id: number
+  tip: number | null
+  suspect: number | null
+  amount_rials: number
+  unique_code: string
+  recipient_national_id: string
+  claimed: boolean
+  claimed_at: string | null
+  created_at: string
 }
 
 export interface PaginatedResponse<T> {

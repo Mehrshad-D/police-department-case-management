@@ -23,7 +23,7 @@ export function HighPriorityPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-bold text-slate-100">High Priority Suspects</h1>
+        <h1 className="text-2xl font-bold text-slate-100">Most Wanted (Dashboard)</h1>
         <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
       </div>
       {error && <p className="text-red-400">Failed to load suspects.</p>}
@@ -33,7 +33,7 @@ export function HighPriorityPage() {
         </div>
       )}
       {!isLoading && filtered.length === 0 && (
-        <Card><CardContent className="py-12 text-center text-slate-500">No high-priority suspects.</CardContent></Card>
+        <Card><CardContent className="py-12 text-center text-slate-500">No most wanted suspects.</CardContent></Card>
       )}
       {!isLoading && filtered.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -41,7 +41,7 @@ export function HighPriorityPage() {
             <Card key={s.id} className="h-full">
               <CardHeader className="flex flex-row items-start justify-between gap-2">
                 <CardTitle className="text-base">{s.user_username}</CardTitle>
-                <span className="rounded bg-amber-500/20 text-amber-400 px-2 py-0.5 text-xs">High priority</span>
+                <span className="rounded bg-amber-500/20 text-amber-400 px-2 py-0.5 text-xs">Most wanted</span>
               </CardHeader>
               <CardContent className="space-y-2">
                 <p className="text-sm text-slate-500">Case: {s.case_title}</p>

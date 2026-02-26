@@ -4,6 +4,7 @@ import { RootLayout } from '@/components/layout/RootLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { HomePage } from '@/pages/HomePage'
+import { MostWantedPage } from '@/pages/MostWantedPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { DashboardOverviewPage } from '@/pages/dashboard/DashboardOverviewPage'
@@ -15,6 +16,8 @@ import { DetectiveBoardPage } from '@/pages/dashboard/DetectiveBoardPage'
 import { HighPriorityPage } from '@/pages/dashboard/HighPriorityPage'
 import { ReportsPage } from '@/pages/dashboard/ReportsPage'
 import { DocumentsPage } from '@/pages/dashboard/DocumentsPage'
+import { TipsPage } from '@/pages/dashboard/TipsPage'
+import { TrialsPage } from '@/pages/dashboard/TrialsPage'
 import { AdminPage } from '@/pages/dashboard/AdminPage'
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
@@ -41,6 +44,7 @@ const router = createBrowserRouter([
     element: <RootLayout />,
     children: [
       { path: '/', element: <HomePage /> },
+      { path: '/most-wanted', element: <MostWantedPage /> },
       { path: '/login', element: <LoginPage /> },
       { path: '/register', element: <RegisterPage /> },
       {
@@ -57,15 +61,9 @@ const router = createBrowserRouter([
       { path: 'reports', element: <ReportsPage /> },
       { path: 'reports/:id', element: <ReportsPage /> },
       { path: 'documents', element: <DocumentsPage /> },
-      {
-        path: 'trials',
-        element: (
-          <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-slate-100">Trials</h1>
-            <p className="text-slate-400">Trials and verdicts — use API docs for endpoints.</p>
-          </div>
-        ),
-      },
+      { path: 'tips', element: <TipsPage /> },
+      { path: 'trials', element: <TrialsPage /> },
+      { path: 'trials/:id', element: <TrialsPage /> },
       { path: 'admin', element: <ProtectedRoute roles={['System Administrator']}><AdminPage /></ProtectedRoute> },
     ],
   },

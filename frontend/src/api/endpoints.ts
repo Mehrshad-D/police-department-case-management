@@ -7,11 +7,15 @@ import type {
   Evidence,
   EvidenceLink,
   Suspect,
+  MostWantedItem,
   Interrogation,
   Trial,
+  TrialFullDetail,
   Verdict,
   Notification,
   Statistics,
+  Tip,
+  Reward,
   PaginatedResponse,
   ApiSuccess,
 } from '@/types'
@@ -89,6 +93,8 @@ export const casesApi = {
   createCrimeScene: (data: CrimeSceneCasePayload) =>
     apiClient.post<{ success: true; data: Case }>('cases/crime-scene/', data).then((res) => res.data.data),
   update: (id: number, data: Partial<Case>) => apiClient.patch<Case>(`cases/${id}/`, data).then((res) => res.data),
+  submitSuspectsToSergeant: (caseId: number) =>
+    apiClient.post<ApiSuccess<Case>>(`cases/${caseId}/submit-suspects-to-sergeant/`).then((res) => res.data.data),
 }
 
 // Complaints
@@ -135,8 +141,18 @@ export const suspectsApi = {
   get: (id: number) => apiClient.get<Suspect>(`suspects/${id}/`).then((res) => res.data),
   propose: (caseId: number, userId: number) =>
     apiClient.post<{ data: Suspect }>('suspects/', { case_id: caseId, user_id: userId }).then((res) => res.data),
-  supervisorReview: (id: number, action: 'approve' | 'reject') =>
-    apiClient.post(`suspects/${id}/supervisor-review/`, { action }).then((res) => res.data),
+  supervisorReview: (id: number, action: 'approve' | 'reject', rejection_message?: string) =>
+    apiClient
+      .post<ApiSuccess<Suspect>>('suspects/' + id + '/supervisor-review/', { action, rejection_message })
+      .then((res) => res.data),
+}
+
+// Most Wanted (public; backend AllowAny)
+export const mostWantedApi = {
+  list: () =>
+    apiClient
+      .get<MostWantedItem[] | { results: MostWantedItem[] }>('most-wanted/')
+      .then((res) => (Array.isArray(res.data) ? res.data : (res.data as { results: MostWantedItem[] }).results ?? [])),
 }
 
 // Interrogations
@@ -154,14 +170,45 @@ export const interrogationsApi = {
 export const trialsApi = {
   list: () => apiClient.get<PaginatedResponse<Trial> | Trial[]>('trials/').then((res) => res.data),
   get: (id: number) => apiClient.get<Trial>(`trials/${id}/`).then((res) => res.data),
+  getFull: (id: number) => apiClient.get<TrialFullDetail>(`trials/${id}/full/`).then((res) => res.data),
   create: (data: { case: number; judge?: number }) => apiClient.post<Trial>('trials/', data).then((res) => res.data),
   update: (id: number, data: Partial<Trial>) => apiClient.patch<Trial>(`trials/${id}/`, data).then((res) => res.data),
 }
 
 export const verdictsApi = {
   list: () => apiClient.get<PaginatedResponse<Verdict> | Verdict[]>('verdicts/').then((res) => res.data),
-  create: (data: { trial: number; title: string; description?: string; punishment_title?: string; punishment_description?: string }) =>
-    apiClient.post<Verdict>('verdicts/', data).then((res) => res.data),
+  create: (data: {
+    trial: number
+    verdict_type: 'guilty' | 'innocent'
+    title?: string
+    description?: string
+    punishment_title?: string
+    punishment_description?: string
+  }) => apiClient.post<Verdict>('verdicts/', data).then((res) => res.data),
+}
+
+// Tips & Rewards
+export const tipsApi = {
+  list: () =>
+    apiClient.get<PaginatedResponse<Tip> | Tip[]>('tips/').then((res) => res.data),
+  create: (data: { case?: number; title: string; description: string }) =>
+    apiClient.post<Tip>('tips/', data).then((res) => res.data),
+  officerReview: (id: number, action: 'approve' | 'reject', message?: string) =>
+    apiClient.post<ApiSuccess<Tip>>(`tips/${id}/officer-review/`, { action, message }).then((res) => res.data),
+  detectiveConfirm: (id: number, amount_rials?: number) =>
+    apiClient
+      .post<{ success: true; data: { tip: Tip; reward_code: string; amount_rials: number } }>(
+        `tips/${id}/detective-confirm/`,
+        amount_rials != null ? { amount_rials } : {}
+      )
+      .then((res) => res.data.data),
+}
+
+export const rewardsApi = {
+  lookup: (national_id: string, code: string) =>
+    apiClient.post<ApiSuccess<Reward>>('rewards/lookup/', { national_id, code }).then((res) => res.data.data),
+  redeem: (national_id: string, code: string) =>
+    apiClient.post<ApiSuccess<Reward>>('rewards/redeem/', { national_id, code }).then((res) => res.data.data),
 }
 
 // Notifications
