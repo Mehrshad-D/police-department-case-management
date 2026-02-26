@@ -1,12 +1,12 @@
 # Police Department Case Management System — Backend
 
-Django REST Framework backend for the digitized police operations system (Checkpoint 1).
+Django REST Framework API for the digitized police operations system: cases, complaints, evidence, suspects, interrogations, captain/chief decisions, trials & verdicts, tips & rewards, and payments.
 
 ## Tech Stack
 
-- **Backend:** Django 4.2 + Django REST Framework
+- **Framework:** Django 4.2 + Django REST Framework
 - **Auth:** JWT (Simple JWT)
-- **API docs:** drf-spectacular (OpenAPI 3 / Swagger)
+- **API docs:** drf-spectacular (OpenAPI 3 / Swagger, ReDoc)
 - **Database:** SQLite (default), PostgreSQL (optional via env)
 
 ## Setup
@@ -15,21 +15,11 @@ From the **backend** directory:
 
 ```bash
 cd backend
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Optional environment:
-
-```bash
-export DB_ENGINE=postgresql
-export DB_NAME=policedb
-export DB_USER=postgres
-export DB_PASSWORD=yourpassword
-export DB_HOST=localhost
-export DB_PORT=5432
-```
 
 Run migrations and seed roles:
 
@@ -48,7 +38,7 @@ Run server (port 8000):
 # Option A: use the run script (uses venv’s Python automatically)
 ./run.sh
 
-# Option B: activate venv then run (use venv’s python explicitly if `python` is not found)
+# Option B: activate venv then run
 source venv/bin/activate
 ./venv/bin/python manage.py runserver 8000
 ```
@@ -64,24 +54,38 @@ The frontend (when run on port 3000) calls `http://localhost:8000/api/` in devel
 
 ## Auth
 
-- **Register:** `POST /api/auth/register/` — body: `username`, `password`, `email`, `phone`, `full_name`, `national_id` (all unique).
-- **Login:** `POST /api/auth/login/` — body: `identifier` (username, national_id, phone, or email) + `password`. Returns JWT tokens.
+- **Register:** `POST /api/auth/register/` — body: `username`, `password`, `email`, `phone`, `full_name`, `national_id` (optional `role_ids`).
+- **Login:** `POST /api/auth/login/` — body: `identifier` (username, national_id, phone, or email) + `password`. Returns JWT tokens and user (with `role_names`).
 - **Refresh:** `POST /api/auth/token/refresh/` — body: `{ "refresh": "<refresh_token>" }`.
+- **Users:** `GET /api/auth/users/`, `GET /api/auth/users/detectives/`, `GET /api/auth/users/suspect-candidates/`, `PATCH /api/auth/users/<id>/` (admin).
+- **Roles:** `GET /api/auth/roles/`, CRUD for role management.
 
 ## Project Structure
 
-```
-config/          # Django project settings and root URLs
-accounts/        # User, Role, auth, permissions
-cases/           # Case, Complaint, CrimeSceneReport, CaseComplainant
-evidence/        # Evidence (all types), EvidenceLink
-suspects/        # Suspect, Interrogation, ArrestOrder
-judiciary/       # Trial, Verdict
-tips_rewards/    # Tip, Reward
-payments/        # BailPayment, FinePayment
-core/            # AuditLog, Notification, statistics
-```
+| App | Description |
+|-----|-------------|
+| **config/** | Django project settings and root URLs |
+| **accounts/** | User, Role, auth (login/register), permissions (Detective, Sergeant, Captain, Police Chief, Judge, etc.) |
+| **cases/** | Case, Complaint, CrimeSceneReport, CaseComplainant; complaint flow (trainee → officer → case) |
+| **evidence/** | Evidence (all types), EvidenceLink, biological evidence review |
+| **suspects/** | Suspect (propose → sergeant approve/reject), Interrogation (detective/sergeant scores), ArrestOrder, CaptainDecision, ChiefApproval; Most Wanted (approved suspects, score = crime_degree × days, reward = score × 20M Rials) |
+| **judiciary/** | Trial (created when captain decides GUILTY; chief approval for CRITICAL), Verdict (judge records guilty/innocent + punishment) |
+| **tips_rewards/** | Tip (submit → officer review → detective confirm), Reward (lookup, verify, redeem) |
+| **payments/** | BailPayment (level 2–3 suspects; level 3 supervisor approval), FinePayment, payment callback |
+| **core/** | AuditLog, Notification, statistics |
 
-## License
+## Main API Endpoints (prefix `/api/`)
 
-University project — Semester 7 Web Course.
+- **Cases:** `GET/POST cases/`, `GET/PATCH cases/<id>/`, `POST cases/<id>/submit-suspects-to-sergeant/`, `GET/POST cases/<case_pk>/complainants/`
+- **Complaints:** `GET/POST complaints/`, `GET complaints/<id>/`, `POST complaints/<id>/correct/`, `POST complaints/<id>/trainee-review/`, `POST complaints/<id>/officer-review/`
+- **Crime scene:** `POST cases/crime-scene/`, `GET/POST crime-scene-reports/`, `POST crime-scene-reports/<id>/approve/`
+- **Evidence:** `GET/POST evidence/`, `GET/PATCH evidence/<id>/`, biological review/image; `GET/POST cases/<case_pk>/evidence-links/`
+- **Suspects:** `GET/POST suspects/`, `GET suspects/<id>/`, `POST suspects/<id>/supervisor-review/`, `GET suspects/high-priority/`, `GET most-wanted/` (public)
+- **Interrogations:** `GET/POST interrogations/`, `POST interrogations/<id>/submit-detective-score/`, `POST interrogations/<id>/submit-sergeant-score/`, `POST interrogations/<id>/captain-decision/`, `POST interrogations/<id>/chief-confirm/`
+- **Captain / Chief:** `GET/POST captain-decisions/`, `POST captain-decisions/<id>/chief-approval/`
+- **Arrest orders:** `GET/POST arrest-orders/`
+- **Trials:** `GET trials/` (Judge), `GET trials/<id>/`, `GET trials/<id>/full/` (full case + arrested suspect + interrogations + captain decisions), `GET trials/full-by-case/<case_id>/`, `POST verdicts/`
+- **Tips & rewards:** `GET/POST tips/`, `POST tips/<id>/officer-review/`, `POST tips/<id>/detective-confirm/`, `POST rewards/lookup/`, `POST rewards/verify/`, `POST rewards/redeem/`
+- **Payments:** `GET/POST bail/`, `POST bail/<id>/approve/`, `GET/POST fines/`, `GET callback/` (payment gateway callback)
+- **Core:** `GET statistics/`, `GET notifications/`, `POST notifications/<id>/read/`
+
