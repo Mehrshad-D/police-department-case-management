@@ -133,7 +133,3 @@ For full stack (backend + frontend), add the frontend service to your root `dock
 ## Tests
 
 Tests include Button, authStore, dashboardModules, cn, HomePage. Run with `npm run test`.
-
-## License
-
-University project — Semester 7 Web Course.
