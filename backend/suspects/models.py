@@ -1,10 +1,16 @@
+"""
+Suspect management: proposal, interrogation, guilt probability, arrest, status tracking.
+Detective proposes -> supervisor reviews with criminal records -> approve (arrest) or reject.
+"""
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
 
+
 class Suspect(models.Model):
-    STATUS_UNDER_PURSUIT = 'under_pursuit'
-    STATUS_HIGH_PRIORITY = 'high_priority'
+    """Suspect linked to a case. Once added -> UNDER_INVESTIGATION; >30 days -> MOST_WANTED."""
+    STATUS_UNDER_INVESTIGATION = 'under_investigation'
+    STATUS_MOST_WANTED = 'most_wanted'  # Under investigation > 30 days
     STATUS_ARRESTED = 'arrested'
     STATUS_RELEASED = 'released'
     STATUS_CONVICTED = 'convicted'
@@ -45,7 +51,7 @@ class Suspect(models.Model):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     marked_at = models.DateTimeField(auto_now_add=True)
-    first_pursuit_date = models.DateTimeField(auto_now_add=True)
+    first_pursuit_date = models.DateTimeField(auto_now_add=True)  # When status became under_investigation
 
     class Meta:
         unique_together = [['case', 'user']]
@@ -55,7 +61,7 @@ class Suspect(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user} - {self.case_id}"
+        return f"Suspect: {self.user} in Case #{self.case_id}"
 
     @property
     def days_under_investigation(self):
@@ -66,31 +72,28 @@ class Suspect(models.Model):
         return max(0, delta.days)
 
     @property
+    def days_pursued(self):
+        """Alias for ranking: same as days_under_investigation for under_investigation/most_wanted."""
+        return self.days_under_investigation
+
+    def crime_degree(self):
+        """Crime severity 1-4: Level 3=1, Level 2=2, Level 1=3, Crisis=4."""
+        from cases.models import Case
+        # Case severity: 3=minor, 2=moderate, 1=major, 0=crisis -> degree 1,2,3,4
+        return 4 - self.case.severity
+
     def ranking_score(self):
-        suspects_for_user = Suspect.objects.filter(user=self.user)
-        max_days = 0
-        for s in suspects_for_user.filter(case__status__in=['open', 'under_investigation']):
-            if s.status in [self.STATUS_UNDER_PURSUIT, self.STATUS_HIGH_PRIORITY]:
-                delta = timezone.now() - s.first_pursuit_date
-                days = max(0, delta.days)
-                if days > max_days:
-                    max_days = days
+        """score = max(days_under_investigation) * max(crime_degree). For single case: days * crime_degree."""
+        return self.days_under_investigation * self.crime_degree()
 
-        max_severity = 0
-        for s in suspects_for_user:
-            sev_val = 4 - s.case.severity
-            if sev_val > max_severity:
-                max_severity = sev_val
-        
-        return max_days * max_severity
+    def reward_rials(self):
+        """reward = score * 20,000,000 (Rials)."""
+        return self.ranking_score() * 20_000_000
 
-    @property
-    def reward_amount(self):
-        return self.ranking_score * 20000000
-
-    def update_high_priority(self):
-        if self.status == self.STATUS_UNDER_PURSUIT and self.days_pursued >= 31:
-            self.status = self.STATUS_HIGH_PRIORITY
+    def update_most_wanted(self):
+        """If under_investigation and >30 days, set most_wanted."""
+        if self.status == self.STATUS_UNDER_INVESTIGATION and self.days_under_investigation > 30:
+            self.status = self.STATUS_MOST_WANTED
             self.save(update_fields=['status'])
 
     def mark_released(self):
