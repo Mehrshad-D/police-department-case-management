@@ -56,6 +56,9 @@ Full-stack project: **backend** (Django REST Framework) and **frontend** (React 
 - **Payments:** Bail (level 2–3; level 3 supervisor approval), fines, payment callback.
 - **Admin Panel:** User list, assign roles, statistics (System Administrator only).
 
+## Testing
+
+See [SCENARIO.md](SCENARIO.md) for a full testing flow (complaints → case → evidence → suspects → captain decision → trials) and a 0%–100% feature checklist.
 
 ## Notes
 
