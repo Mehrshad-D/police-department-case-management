@@ -32,7 +32,7 @@ class EvidenceListCreateView(generics.ListCreateAPIView):
         case_id = self.request.query_params.get('case')
         if case_id:
             qs = qs.filter(case_id=case_id)
-        return qs.order_by('-date_recorded')
+        return qs.order_by('-created_at')
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -71,17 +71,19 @@ class BiologicalEvidenceReviewView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         bio = evidence.biological_detail
-        status_val = request.data.get('validity_status')
-        if status_val not in (BiologicalEvidence.STATUS_APPROVED, BiologicalEvidence.STATUS_REJECTED):
+        status_val = request.data.get('verification_status')
+        allowed = (BiologicalEvidence.STATUS_VERIFIED_FORENSIC, BiologicalEvidence.STATUS_VERIFIED_NATIONAL_DB, BiologicalEvidence.STATUS_REJECTED)
+        if status_val not in allowed:
             return Response(
-                {'success': False, 'error': {'message': 'validity_status must be approved or rejected.'}},
+                {'success': False, 'error': {'message': 'verification_status must be verified_forensic, verified_national_db, or rejected.'}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        bio.validity_status = status_val
+        bio.verification_status = status_val
+        bio.verification_result = request.data.get('verification_result') or ''
         bio.reviewed_by = request.user
         bio.reviewed_at = timezone.now()
         bio.save()
-        log_audit(request.user, 'approve' if status_val == 'approved' else 'reject', 'BiologicalEvidence', bio.pk, f'Validity {status_val}')
+        log_audit(request.user, 'update', 'BiologicalEvidence', bio.pk, f'Verification {status_val}')
         if evidence.case.assigned_detective_id:
             notify(
                 evidence.case.assigned_detective,

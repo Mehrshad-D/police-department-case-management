@@ -1,24 +1,32 @@
 """
 Evidence management: base evidence + types (witness, biological, vehicle, ID doc, other).
-All evidence: title, description, date, recorder.
-Detective can link related evidence (visual board).
+All evidence: title, description, created_at (auto), recorder (auto), case relation.
+Uploads: validation, storage, media serving, size/type limits.
 """
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
+
+
+# Max file size for evidence uploads (10 MB)
+EVIDENCE_FILE_MAX_SIZE = 10 * 1024 * 1024
+ALLOWED_IMAGE_TYPES = ('image/jpeg', 'image/png', 'image/gif', 'image/webp')
+ALLOWED_VIDEO_TYPES = ('video/mp4', 'video/webm', 'video/quicktime')
+ALLOWED_AUDIO_TYPES = ('audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm')
 
 
 class Evidence(models.Model):
-    """Base evidence: title, description, date, recorder. Subtypes add specific fields."""
+    """Base evidence: title, description, created_at, recorder, case. Subtypes add specific fields."""
     TYPE_WITNESS = 'witness'
     TYPE_BIOLOGICAL = 'biological'
     TYPE_VEHICLE = 'vehicle'
     TYPE_ID_DOCUMENT = 'id_document'
     TYPE_OTHER = 'other'
     TYPE_CHOICES = [
-        (TYPE_WITNESS, 'Witness Statement/Media'),
-        (TYPE_BIOLOGICAL, 'Biological/Forensic'),
+        (TYPE_WITNESS, 'Witness'),
+        (TYPE_BIOLOGICAL, 'Biological'),
         (TYPE_VEHICLE, 'Vehicle'),
-        (TYPE_ID_DOCUMENT, 'ID Document'),
+        (TYPE_ID_DOCUMENT, 'Identification Document'),
         (TYPE_OTHER, 'Other'),
     ]
 
@@ -30,7 +38,6 @@ class Evidence(models.Model):
     evidence_type = models.CharField(max_length=32, choices=TYPE_CHOICES)
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    date_recorded = models.DateTimeField(auto_now_add=True)  # can be overridden
     recorder = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -41,7 +48,7 @@ class Evidence(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-date_recorded', '-created_at']
+        ordering = ['-created_at']
         indexes = [
             models.Index(fields=['case', 'evidence_type']),
         ]
@@ -52,25 +59,49 @@ class Evidence(models.Model):
 
 
 class WitnessEvidence(models.Model):
-    """Witness statements or media (file/URL)."""
+    """Witness: transcript (optional), media files (image/video/audio)."""
     evidence = models.OneToOneField(
         Evidence,
         on_delete=models.CASCADE,
         related_name='witness_detail',
     )
+    transcript = models.TextField(blank=True)
+    # Legacy single file/URL for backward compatibility; prefer media_files
     statement = models.TextField(blank=True)
     media_file = models.FileField(upload_to='evidence/witness/', blank=True, null=True)
     media_url = models.URLField(blank=True)
 
 
+class WitnessMedia(models.Model):
+    """Witness evidence: multiple media files (image, video, audio)."""
+    MEDIA_IMAGE = 'image'
+    MEDIA_VIDEO = 'video'
+    MEDIA_AUDIO = 'audio'
+    MEDIA_CHOICES = [
+        (MEDIA_IMAGE, 'Image'),
+        (MEDIA_VIDEO, 'Video'),
+        (MEDIA_AUDIO, 'Audio'),
+    ]
+    witness_evidence = models.ForeignKey(
+        WitnessEvidence,
+        on_delete=models.CASCADE,
+        related_name='media_files',
+    )
+    file = models.FileField(upload_to='evidence/witness/media/')
+    media_type = models.CharField(max_length=16, choices=MEDIA_CHOICES)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+
 class BiologicalEvidence(models.Model):
-    """Biological/forensic: images + later lab results. Forensic doctor approves/rejects."""
+    """Biological: >=1 image required; verification_status; verification_result (nullable); editable by authorized roles only."""
     STATUS_PENDING = 'pending'
-    STATUS_APPROVED = 'approved'
+    STATUS_VERIFIED_FORENSIC = 'verified_forensic'
+    STATUS_VERIFIED_NATIONAL_DB = 'verified_national_db'
     STATUS_REJECTED = 'rejected'
     STATUS_CHOICES = [
         (STATUS_PENDING, 'Pending'),
-        (STATUS_APPROVED, 'Approved'),
+        (STATUS_VERIFIED_FORENSIC, 'Verified (Forensic)'),
+        (STATUS_VERIFIED_NATIONAL_DB, 'Verified (National DB)'),
         (STATUS_REJECTED, 'Rejected'),
     ]
 
@@ -79,7 +110,12 @@ class BiologicalEvidence(models.Model):
         on_delete=models.CASCADE,
         related_name='biological_detail',
     )
-    lab_results = models.TextField(blank=True)
+    verification_status = models.CharField(
+        max_length=32,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
+    verification_result = models.TextField(null=True, blank=True)
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -87,16 +123,11 @@ class BiologicalEvidence(models.Model):
         blank=True,
         related_name='reviewed_biological_evidence',
     )
-    validity_status = models.CharField(
-        max_length=16,
-        choices=STATUS_CHOICES,
-        default=STATUS_PENDING,
-    )
     reviewed_at = models.DateTimeField(null=True, blank=True)
 
 
 class BiologicalEvidenceImage(models.Model):
-    """Images attached to biological evidence."""
+    """Images attached to biological evidence (>=1 required)."""
     biological_evidence = models.ForeignKey(
         BiologicalEvidence,
         on_delete=models.CASCADE,
@@ -108,33 +139,35 @@ class BiologicalEvidenceImage(models.Model):
 
 
 class VehicleEvidence(models.Model):
-    """Vehicle: plate OR serial, not both (enforced in serializer/clean)."""
+    """Vehicle: model, color; exactly one of license_plate or serial_number."""
     evidence = models.OneToOneField(
         Evidence,
         on_delete=models.CASCADE,
         related_name='vehicle_detail',
     )
-    plate_number = models.CharField(max_length=32, blank=True)
+    model = models.CharField(max_length=128, blank=True)
+    color = models.CharField(max_length=64, blank=True)
+    license_plate = models.CharField(max_length=32, blank=True)
     serial_number = models.CharField(max_length=64, blank=True)
-    make_model = models.CharField(max_length=128, blank=True)
 
     def clean(self):
-        from django.core.exceptions import ValidationError
-        if self.plate_number and self.serial_number:
-            raise ValidationError('Provide either plate_number or serial_number, not both.')
-        if not self.plate_number and not self.serial_number:
-            raise ValidationError('Provide either plate_number or serial_number.')
+        has_plate = bool(self.license_plate and self.license_plate.strip())
+        has_serial = bool(self.serial_number and self.serial_number.strip())
+        if has_plate and has_serial:
+            raise ValidationError('Provide exactly one of license_plate or serial_number, not both.')
+        if not has_plate and not has_serial:
+            raise ValidationError('Provide exactly one of license_plate or serial_number.')
 
 
 class IDDocumentEvidence(models.Model):
-    """ID document: flexible key-value attributes."""
+    """ID document: owner_full_name, attributes (JSON key-value, optional)."""
     evidence = models.OneToOneField(
         Evidence,
         on_delete=models.CASCADE,
         related_name='id_document_detail',
     )
-    # Flexible attributes, e.g. {"document_type": "national_id", "number": "123..."}
-    attributes = models.JSONField(default=dict)
+    owner_full_name = models.CharField(max_length=255, blank=True)
+    attributes = models.JSONField(default=dict, blank=True)
 
 
 class EvidenceLink(models.Model):
@@ -154,7 +187,7 @@ class EvidenceLink(models.Model):
         on_delete=models.CASCADE,
         related_name='links_to',
     )
-    link_type = models.CharField(max_length=64, blank=True)  # e.g. 'supports', 'contradicts'
+    link_type = models.CharField(max_length=64, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
