@@ -22,12 +22,14 @@ class Case(models.Model):
 
     STATUS_OPEN = 'open'
     STATUS_UNDER_INVESTIGATION = 'under_investigation'
+    STATUS_WAITING_SERGEANT_APPROVAL = 'waiting_sergeant_approval'
     STATUS_PENDING_APPROVAL = 'pending_approval'
     STATUS_REFERRED_TO_JUDICIARY = 'referred_to_judiciary'
     STATUS_CLOSED = 'closed'
     STATUS_CHOICES = [
         (STATUS_OPEN, 'Open'),
         (STATUS_UNDER_INVESTIGATION, 'Under Investigation'),
+        (STATUS_WAITING_SERGEANT_APPROVAL, 'Waiting Sergeant Approval'),
         (STATUS_PENDING_APPROVAL, 'Pending Approval'),
         (STATUS_REFERRED_TO_JUDICIARY, 'Referred to Judiciary'),
         (STATUS_CLOSED, 'Closed'),

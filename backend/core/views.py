@@ -25,7 +25,7 @@ class StatisticsView(APIView):
             ).count(),
             'evidence_total': Evidence.objects.count(),
             'suspects_total': Suspect.objects.count(),
-            'suspects_high_priority': Suspect.objects.filter(status=Suspect.STATUS_HIGH_PRIORITY).count(),
+            'suspects_high_priority': Suspect.objects.filter(status=Suspect.STATUS_MOST_WANTED).count(),
             'users_total': User.objects.count(),
         }
         return Response({'success': True, 'data': stats})

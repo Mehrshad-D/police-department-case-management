@@ -8,12 +8,14 @@ class Suspect(models.Model):
     STATUS_ARRESTED = 'arrested'
     STATUS_RELEASED = 'released'
     STATUS_CONVICTED = 'convicted'
+    STATUS_REJECTED = 'rejected'
     STATUS_CHOICES = [
-        (STATUS_UNDER_PURSUIT, 'Under Pursuit'),
-        (STATUS_HIGH_PRIORITY, 'High Priority'),
+        (STATUS_UNDER_INVESTIGATION, 'Under Investigation'),
+        (STATUS_MOST_WANTED, 'Most Wanted'),
         (STATUS_ARRESTED, 'Arrested'),
         (STATUS_RELEASED, 'Released'),
         (STATUS_CONVICTED, 'Convicted'),
+        (STATUS_REJECTED, 'Rejected'),
     ]
 
     case = models.ForeignKey(
@@ -26,7 +28,8 @@ class Suspect(models.Model):
         on_delete=models.CASCADE,
         related_name='suspect_in_cases',
     )
-    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_UNDER_PURSUIT)
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_UNDER_INVESTIGATION)
+    rejection_message = models.TextField(blank=True)
     proposed_by_detective = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -55,8 +58,9 @@ class Suspect(models.Model):
         return f"{self.user} - {self.case_id}"
 
     @property
-    def days_pursued(self):
-        if self.status not in (self.STATUS_UNDER_PURSUIT, self.STATUS_HIGH_PRIORITY):
+    def days_under_investigation(self):
+        """Days since marked as suspect while under investigation or most_wanted."""
+        if self.status not in (self.STATUS_UNDER_INVESTIGATION, self.STATUS_MOST_WANTED):
             return 0
         delta = timezone.now() - self.first_pursuit_date
         return max(0, delta.days)

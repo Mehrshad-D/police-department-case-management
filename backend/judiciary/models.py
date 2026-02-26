@@ -30,13 +30,21 @@ class Trial(models.Model):
 
 
 class Verdict(models.Model):
-    """Final verdict and punishment (title + description)."""
+    """Judge records verdict (GUILTY/INNOCENT) and punishment (title + description)."""
+    VERDICT_GUILTY = 'guilty'
+    VERDICT_INNOCENT = 'innocent'
+    VERDICT_CHOICES = [
+        (VERDICT_GUILTY, 'Guilty'),
+        (VERDICT_INNOCENT, 'Innocent'),
+    ]
+
     trial = models.OneToOneField(
         Trial,
         on_delete=models.CASCADE,
         related_name='verdict',
     )
-    title = models.CharField(max_length=255)
+    verdict_type = models.CharField(max_length=16, choices=VERDICT_CHOICES, default=VERDICT_GUILTY)
+    title = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
     punishment_title = models.CharField(max_length=255, blank=True)
     punishment_description = models.TextField(blank=True)

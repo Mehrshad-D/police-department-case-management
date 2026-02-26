@@ -36,7 +36,7 @@ class TipListCreateView(generics.ListCreateAPIView):
 
 
 class TipOfficerReviewView(APIView):
-    """Officer reviews tip -> forwards to detective."""
+    """Officer reviews tip: if valid -> forward to detective; if invalid -> reject (user notified)."""
     permission_classes = [IsAuthenticated, IsPoliceOfficer]
 
     def post(self, request, pk):
@@ -46,12 +46,20 @@ class TipOfficerReviewView(APIView):
                 {'success': False, 'error': {'message': 'Tip not pending.'}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        action = request.data.get('action', 'approve')  # 'approve' | 'reject'
+        if action == 'reject':
+            tip.status = Tip.STATUS_REJECTED
+            tip.reviewed_by_officer = request.user
+            tip.save()
+            notify(tip.submitter, 'Tip rejected', request.data.get('message', 'Your tip was rejected as invalid.'), 'tip_rejected', 'Tip', tip.pk)
+            log_audit(request.user, 'reject', 'Tip', tip.pk, 'Tip rejected by officer')
+            return Response({'success': True, 'data': TipListSerializer(tip).data, 'message': 'Tip rejected.'})
         tip.status = Tip.STATUS_OFFICER_REVIEWED
         tip.reviewed_by_officer = request.user
         tip.save()
         for u in User.objects.filter(roles__name='Detective'):
             notify(u, 'Tip to confirm', tip.title, 'tip_pending_detective', 'Tip', tip.pk)
-        log_audit(request.user, 'update', 'Tip', tip.pk, 'Officer reviewed')
+        log_audit(request.user, 'update', 'Tip', tip.pk, 'Officer reviewed; sent to detective')
         return Response({'success': True, 'data': TipListSerializer(tip).data})
 
 
@@ -104,3 +112,32 @@ class RewardLookupView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response({'success': True, 'data': RewardSerializer(reward).data})
+
+
+class RewardRedeemView(APIView):
+    """Police marks reward as claimed when user redeems at police office (national_id + code)."""
+    permission_classes = [IsAuthenticated, IsOfficerOrAbove]
+
+    def post(self, request):
+        ser = RewardClaimLookupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        reward = Reward.objects.filter(
+            recipient_national_id=ser.validated_data['national_id'],
+            unique_code=ser.validated_data['code'],
+        ).first()
+        if not reward:
+            return Response(
+                {'success': False, 'error': {'message': 'No reward found for this national ID and code.'}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if reward.claimed:
+            return Response(
+                {'success': False, 'error': {'message': 'Reward already redeemed.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from django.utils import timezone
+        reward.claimed = True
+        reward.claimed_at = timezone.now()
+        reward.save(update_fields=['claimed', 'claimed_at'])
+        log_audit(request.user, 'update', 'Reward', reward.pk, 'Reward redeemed at police office')
+        return Response({'success': True, 'data': RewardSerializer(reward).data, 'message': 'Reward redeemed.'})
