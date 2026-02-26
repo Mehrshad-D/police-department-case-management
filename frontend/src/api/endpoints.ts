@@ -111,10 +111,10 @@ export const evidenceApi = {
     apiClient.get<PaginatedResponse<Evidence> | Evidence[]>('evidence/', { params }).then((res) => res.data),
   get: (id: number) => apiClient.get<Evidence>(`evidence/${id}/`).then((res) => res.data),
   create: (data: FormData | Record<string, unknown>) =>
-    apiClient.post<Evidence>('evidence/', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : {}).then((res) => res.data),
+    apiClient.post<Evidence>('evidence/', data, data instanceof FormData ? {} : {}).then((res) => res.data),
   delete: (id: number) => apiClient.delete(`evidence/${id}/`),
-  biologicalReview: (id: number, validity_status: 'approved' | 'rejected') =>
-    apiClient.post(`evidence/${id}/biological-review/`, { validity_status }).then((res) => res.data),
+  biologicalReview: (id: number, data: { verification_status: 'verified_forensic' | 'verified_national_db' | 'rejected'; verification_result?: string }) =>
+    apiClient.post(`evidence/${id}/biological-review/`, data).then((res) => res.data),
 }
 
 // Evidence links (for detective board)

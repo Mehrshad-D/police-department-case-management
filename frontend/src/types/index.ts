@@ -88,15 +88,15 @@ export interface Evidence {
   evidence_type: string
   title: string
   description: string
-  date_recorded: string
+  date_recorded?: string
   recorder: number | null
   recorder_username: string | null
   created_at: string
   updated_at: string
-  witness_detail?: unknown
-  biological_detail?: unknown
-  vehicle_detail?: unknown
-  id_document_detail?: unknown
+  witness_detail?: { transcript?: string; media_files?: { file: string; media_type: string }[] }
+  biological_detail?: { verification_status: string; verification_result?: string | null; images?: { id: number; image: string; caption?: string }[] }
+  vehicle_detail?: { model?: string; color?: string; license_plate?: string; serial_number?: string }
+  id_document_detail?: { owner_full_name?: string; attributes?: Record<string, unknown> }
 }
 
 export interface EvidenceLink {
