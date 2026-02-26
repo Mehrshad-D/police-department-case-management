@@ -35,7 +35,7 @@ export function MostWantedPage() {
       </header>
       <main className="mx-auto max-w-6xl px-4 py-8">
         <p className="text-slate-400 mb-6">
-          Individuals under investigation for more than 30 days. Ranking by score (days × crime degree). Reward = score × 20,000,000 Rials.
+          Approved suspects (after sergeant approval). Score = crime degree (1–4) × days under investigation. Sorted by score (highest first). Reward = score × 20,000,000 Rials.
         </p>
         {error && <p className="text-red-400">Failed to load list.</p>}
         {isLoading && (

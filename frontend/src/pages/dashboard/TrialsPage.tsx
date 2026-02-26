@@ -76,7 +76,7 @@ export function TrialsPage() {
       )
     }
     const trial = fullDetail as TrialFullDetail
-    const hasVerdict = false // could check trial.verdict from API if we had it
+    const hasVerdict = !!trial.verdict
 
     return (
       <div className="space-y-6">
@@ -94,6 +94,57 @@ export function TrialsPage() {
             <p><strong>Severity:</strong> {trial.case_data?.severity}</p>
           </CardContent>
         </Card>
+
+        {trial.arrested_suspect && (
+          <Card className="border-amber-700/50">
+            <CardHeader>
+              <CardTitle>Arrested person (defendant)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p><strong>Name:</strong> {trial.arrested_suspect.user_full_name || trial.arrested_suspect.user_username}</p>
+              <p><strong>Username:</strong> {trial.arrested_suspect.user_username}</p>
+              <p><strong>National ID:</strong> {trial.arrested_suspect.user_national_id || '—'}</p>
+              <p><strong>Status:</strong> {trial.arrested_suspect.status?.replace(/_/g, ' ')}</p>
+              <p><strong>Case:</strong> {trial.arrested_suspect.case_title}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {(trial.interrogations?.length ?? 0) > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Interrogation — Detective & Sergeant</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {trial.interrogations.map((inter: { id: number; suspect: number; detective_probability: number | null; supervisor_probability: number | null; notes?: string; captain_decision?: string; created_at: string }) => (
+                <div key={inter.id} className="rounded-lg border border-slate-600 bg-slate-800/50 p-4 text-sm space-y-2">
+                  <p><strong>Detective guilt score (1–10):</strong> {inter.detective_probability ?? '—'}</p>
+                  <p><strong>Sergeant guilt score (1–10):</strong> {inter.supervisor_probability ?? '—'}</p>
+                  {inter.notes && <p><strong>Comments (Detective / Sergeant):</strong> <span className="text-slate-300">{inter.notes}</span></p>}
+                  {inter.captain_decision && <p><strong>Captain decision notes:</strong> <span className="text-slate-300">{inter.captain_decision}</span></p>}
+                  <p className="text-slate-500 text-xs">{formatDate(inter.created_at)}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {(trial.captain_decisions?.length ?? 0) > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Captain decision(s)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {trial.captain_decisions.map((cd: { id: number; final_decision: string; reasoning: string; created_at: string }) => (
+                <div key={cd.id} className="rounded-lg border border-slate-600 bg-slate-800/50 p-4 text-sm space-y-2">
+                  <p><strong>Decision:</strong> {cd.final_decision?.toUpperCase()}</p>
+                  {cd.reasoning && <p><strong>Reasoning:</strong> <span className="text-slate-300">{cd.reasoning}</span></p>}
+                  <p className="text-slate-500 text-xs">{formatDate(cd.created_at)}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -122,6 +173,23 @@ export function TrialsPage() {
           </CardContent>
         </Card>
 
+        {hasVerdict && trial.verdict && (
+          <Card className="border-emerald-700/50">
+            <CardHeader>
+              <CardTitle>Recorded verdict</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p><strong>Verdict:</strong> {trial.verdict.verdict_type?.toUpperCase()}</p>
+              {trial.verdict.title && <p><strong>Title:</strong> {trial.verdict.title}</p>}
+              {trial.verdict.description && <p><strong>Description:</strong> {trial.verdict.description}</p>}
+              {trial.verdict.punishment_title && <p><strong>Punishment:</strong> {trial.verdict.punishment_title}</p>}
+              {trial.verdict.punishment_description && <p className="text-slate-300">{trial.verdict.punishment_description}</p>}
+              <p className="text-slate-500 text-xs">{formatDate(trial.verdict.recorded_at)}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {!hasVerdict && (
         <Card>
           <CardHeader>
             <CardTitle>Record verdict</CardTitle>
@@ -190,6 +258,7 @@ export function TrialsPage() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
     )
   }

@@ -35,13 +35,17 @@ class VerdictCreateSerializer(serializers.ModelSerializer):
 
 
 class TrialFullDetailSerializer(serializers.ModelSerializer):
-    """Full case data for Judge: case, evidence, reports, approvals, all personnel."""
+    """Full case data for Judge: case, evidence, arrested person, interrogations (detective/sergeant), captain decisions, personnel."""
     judge_username = serializers.CharField(source='judge.username', read_only=True, allow_null=True)
     case_data = serializers.SerializerMethodField()
     evidence_items = serializers.SerializerMethodField()
     crime_scene_report = serializers.SerializerMethodField()
     complainants = serializers.SerializerMethodField()
     suspects = serializers.SerializerMethodField()
+    arrested_suspect = serializers.SerializerMethodField()
+    interrogations = serializers.SerializerMethodField()
+    captain_decisions = serializers.SerializerMethodField()
+    verdict = serializers.SerializerMethodField()
     personnel = serializers.SerializerMethodField()
 
     class Meta:
@@ -49,7 +53,8 @@ class TrialFullDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'case', 'judge', 'judge_username', 'started_at', 'closed_at',
             'case_data', 'evidence_items', 'crime_scene_report', 'complainants',
-            'suspects', 'personnel',
+            'suspects', 'arrested_suspect', 'interrogations', 'captain_decisions', 'verdict',
+            'personnel',
         ]
 
     def get_case_data(self, obj):
@@ -70,6 +75,27 @@ class TrialFullDetailSerializer(serializers.ModelSerializer):
 
     def get_suspects(self, obj):
         return SuspectListSerializer(obj.case.suspects.all(), many=True).data
+
+    def get_arrested_suspect(self, obj):
+        """The suspect referred to this trial (arrested person)."""
+        if obj.suspect_id:
+            return SuspectListSerializer(obj.suspect).data
+        return None
+
+    def get_interrogations(self, obj):
+        """Interrogation(s) with detective/sergeant scores and notes for the trial suspect(s)."""
+        from suspects.models import Interrogation
+        qs = Interrogation.objects.filter(suspect__case=obj.case).select_related('suspect').order_by('-created_at')
+        return InterrogationSerializer(qs, many=True).data
+
+    def get_captain_decisions(self, obj):
+        """Captain decision(s) with reasoning for this case."""
+        return CaptainDecisionSerializer(obj.case.captain_decisions.all(), many=True).data
+
+    def get_verdict(self, obj):
+        if getattr(obj, 'verdict', None):
+            return VerdictSerializer(obj.verdict).data
+        return None
 
     def get_personnel(self, obj):
         """All police personnel involved: created_by, assigned_detective, approved_by_captain, etc."""

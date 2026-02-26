@@ -26,6 +26,7 @@ export function HighPriorityPage() {
         <h1 className="text-2xl font-bold text-slate-100">Most Wanted (Dashboard)</h1>
         <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
       </div>
+      <p className="text-slate-400">Approved suspects. Score = crime degree (1–4) × days. Sorted by score DESC. Reward = score × 20,000,000 Rials.</p>
       {error && <p className="text-red-400">Failed to load suspects.</p>}
       {isLoading && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

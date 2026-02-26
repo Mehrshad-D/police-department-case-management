@@ -217,6 +217,10 @@ export interface TrialFullDetail {
   crime_scene_report: unknown | null
   complainants: CaseComplainant[]
   suspects: Suspect[]
+  arrested_suspect: Suspect | null
+  interrogations: Interrogation[]
+  captain_decisions: CaptainDecision[]
+  verdict: Verdict | null
   personnel: { id: number; username: string; full_name: string; role_names: string[] }[]
 }
 

@@ -371,26 +371,31 @@ class ArrestOrderListCreateView(generics.ListCreateAPIView):
         serializer.save(issued_by=self.request.user)
 
 
+def _most_wanted_queryset():
+    """Approved suspects (under investigation or most_wanted). Score = max(Lj)*max(Di) = crime_degree * days. Reward = score * 20,000,000 Rials. Sorted by score DESC."""
+    qs = Suspect.objects.filter(
+        approved_by_supervisor__isnull=False,
+        status__in=(Suspect.STATUS_UNDER_INVESTIGATION, Suspect.STATUS_MOST_WANTED),
+    )
+    for s in qs:
+        s.update_most_wanted()
+    # Sort by ranking_score (crime_degree * days_under_investigation) descending
+    return sorted(qs, key=lambda s: s.ranking_score(), reverse=True)
+
+
 class SuspectHighPriorityListView(generics.ListAPIView):
-    """Dashboard listing: suspects with status most_wanted (under investigation >30 days)."""
+    """Dashboard: approved suspects on Most Wanted list. Score = crime_degree * days, reward = score * 20M Rials. Order by score DESC."""
     serializer_class = SuspectListSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        for s in Suspect.objects.filter(status=Suspect.STATUS_UNDER_INVESTIGATION):
-            s.update_most_wanted()
-        return Suspect.objects.filter(status=Suspect.STATUS_MOST_WANTED).order_by('-first_pursuit_date')
+        return _most_wanted_queryset()
 
 
 class MostWantedPublicListView(generics.ListAPIView):
-    """Public Most Wanted page: photo, personal details, ranking by score, reward = score * 20,000,000 Rials."""
+    """Public Most Wanted: approved suspects. Score = max(Lj)*max(Di) (crime degree 1–4 × days). Reward = score * 20,000,000 Rials. Order by score DESC."""
     serializer_class = MostWantedPublicSerializer
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        qs = Suspect.objects.filter(status__in=(Suspect.STATUS_UNDER_INVESTIGATION, Suspect.STATUS_MOST_WANTED))
-        for s in qs:
-            s.update_most_wanted()
-        most_wanted = Suspect.objects.filter(status=Suspect.STATUS_MOST_WANTED)
-        # Sort by ranking_score descending (score = days * crime_degree)
-        return sorted(most_wanted, key=lambda s: s.ranking_score(), reverse=True)
+        return _most_wanted_queryset()
