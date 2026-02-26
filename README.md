@@ -14,11 +14,17 @@ Full-stack project: **backend** (Django REST Framework) and **frontend** (React 
 
    ```bash
    cd backend
-   source venv/bin/activate   # or create: python -m venv venv && source venv/bin/activate
+   python3 -m venv venv
+   source venv/bin/activate   # Windows: venv\Scripts\activate
    pip install -r requirements.txt
    python manage.py migrate
    python manage.py seed_roles
+   python manage.py createsuperuser
+   python manage.py assign_superuser_as_admin
    python manage.py runserver 8000
+   ```
+
+   Or use the run script: `./run.sh` (from the backend directory).
    ```
 
 2. **Frontend** (terminal 2):
