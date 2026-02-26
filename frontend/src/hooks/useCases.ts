@@ -43,3 +43,15 @@ export function useCaseUpdate(id: number) {
     },
   })
 }
+
+export function useCaseSubmitSuspectsToSergeant(caseId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => casesApi.submitSuspectsToSergeant(caseId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cases'] })
+      qc.invalidateQueries({ queryKey: ['case', caseId] })
+      qc.invalidateQueries({ queryKey: ['suspects'] })
+    },
+  })
+}

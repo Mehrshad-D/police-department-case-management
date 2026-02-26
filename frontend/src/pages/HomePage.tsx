@@ -35,7 +35,7 @@ export function HomePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="mt-8 flex gap-4"
+            className="mt-8 flex flex-wrap gap-4"
           >
             <Link to="/login">
               <Button size="lg">Sign in</Button>
@@ -43,6 +43,11 @@ export function HomePage() {
             <Link to="/register">
               <Button variant="secondary" size="lg">
                 Register
+              </Button>
+            </Link>
+            <Link to="/most-wanted">
+              <Button variant="outline" size="lg">
+                Most Wanted
               </Button>
             </Link>
           </motion.div>

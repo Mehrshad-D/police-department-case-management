@@ -35,8 +35,19 @@ export function useSuspectPropose() {
 export function useSuspectSupervisorReview() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, action }: { id: number; action: 'approve' | 'reject' }) =>
-      suspectsApi.supervisorReview(id, action),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['suspects'] }),
+    mutationFn: ({
+      id,
+      action,
+      rejection_message,
+    }: {
+      id: number
+      action: 'approve' | 'reject'
+      rejection_message?: string
+    }) => suspectsApi.supervisorReview(id, action, rejection_message),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['suspects'] })
+      qc.invalidateQueries({ queryKey: ['suspect', id] })
+      qc.invalidateQueries({ queryKey: ['cases'] })
+    },
   })
 }

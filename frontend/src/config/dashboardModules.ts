@@ -34,11 +34,11 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
   },
   {
     id: 'high-priority',
-    label: 'High Priority Suspects',
+    label: 'Most Wanted',
     path: '/dashboard/high-priority',
     icon: 'alert-triangle',
     roles: ['Detective', 'Sergeant', 'Captain', 'Police Chief', 'Police Officer', 'System Administrator'],
-    description: 'Track high-priority suspects',
+    description: 'Track most wanted suspects (>30 days under investigation)',
   },
   {
     id: 'reports',
@@ -55,6 +55,14 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
     icon: 'archive',
     roles: ['Detective', 'Police Officer', 'Forensic Doctor', 'System Administrator'],
     description: 'Upload and review evidence',
+  },
+  {
+    id: 'tips',
+    label: 'Tips & Rewards',
+    path: '/dashboard/tips',
+    icon: 'message-circle',
+    roles: ['Police Officer', 'Detective', 'Sergeant', 'Captain', 'Police Chief', 'System Administrator', 'Complainant / Witness'],
+    description: 'Submit tips; officer/detective review; redeem reward codes',
   },
   {
     id: 'trials',
