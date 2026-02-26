@@ -11,11 +11,14 @@ function ensureArray<T>(x: T[] | { results: T[] }): T[] {
   return Array.isArray(x) ? x : (x as { results: T[] }).results ?? []
 }
 
+type SuccessMessage = { type: 'referred' } | { type: 'chief_required' } | { type: 'released' }
+
 export function CaptainDecisionPage() {
   const qc = useQueryClient()
   const [reasoning, setReasoning] = useState('')
   const [selectedDecision, setSelectedDecision] = useState<{ suspectId: number; caseId: number } | null>(null)
   const [decision, setDecision] = useState<'guilty' | 'not_guilty'>('not_guilty')
+  const [successMessage, setSuccessMessage] = useState<SuccessMessage | null>(null)
 
   const { data: interrogationsData } = useQuery({
     queryKey: ['interrogations', 'all'],
@@ -29,10 +32,19 @@ export function CaptainDecisionPage() {
   const createDecision = useMutation({
     mutationFn: (payload: { suspect_id: number; case_id: number; final_decision: 'guilty' | 'not_guilty'; reasoning?: string }) =>
       captainDecisionsApi.create(payload),
-    onSuccess: () => {
+    onSuccess: (response: { success?: boolean; data?: unknown; requires_chief_approval?: boolean }, variables) => {
       qc.invalidateQueries({ queryKey: ['captain-decisions'] })
       qc.invalidateQueries({ queryKey: ['interrogations'] })
+      qc.invalidateQueries({ queryKey: ['trials'] })
       setSelectedDecision(null)
+      if (response?.requires_chief_approval) {
+        setSuccessMessage({ type: 'chief_required' })
+      } else if (variables.final_decision === 'guilty') {
+        setSuccessMessage({ type: 'referred' })
+      } else {
+        setSuccessMessage({ type: 'released' })
+      }
+      setTimeout(() => setSuccessMessage(null), 8000)
     },
   })
 
@@ -42,6 +54,27 @@ export function CaptainDecisionPage() {
       <p className="text-slate-400">
         Suspects with both detective and sergeant scores are listed below. Make final decision (GUILTY / NOT GUILTY). CRITICAL cases require Chief approval.
       </p>
+      {successMessage && (
+        <Card className={successMessage.type === 'referred' ? 'border-emerald-600 bg-emerald-950/40' : successMessage.type === 'chief_required' ? 'border-amber-600 bg-amber-950/40' : 'border-slate-600'}>
+          <CardContent className="py-4">
+            {successMessage.type === 'referred' && (
+              <p className="text-emerald-200">
+                <strong>Case referred to court.</strong> A trial has been created and will appear in the <strong>Trials</strong> list for the Judge. The judge can open the trial, review the full case, and record a verdict.
+              </p>
+            )}
+            {successMessage.type === 'chief_required' && (
+              <p className="text-amber-200">
+                <strong>Decision recorded.</strong> This is a CRITICAL case — Chief approval is required before the case is referred to court. After the Chief approves, a trial will be created for the Judge.
+              </p>
+            )}
+            {successMessage.type === 'released' && (
+              <p className="text-slate-300">
+                <strong>Decision recorded.</strong> Suspect marked NOT GUILTY and released. Case remains in your workflow as needed.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
       {readyForCaptain.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-slate-500">No interrogations ready for captain decision (need both scores).</CardContent>

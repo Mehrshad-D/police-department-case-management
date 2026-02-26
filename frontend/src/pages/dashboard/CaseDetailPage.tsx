@@ -341,60 +341,74 @@ export function CaseDetailPage() {
                         </Button>
                       ) : (
                         <div className="grid gap-4 sm:grid-cols-2">
+                          {/* Detective score: only assigned detective can set; sergeant sees read-only */}
                           <div>
                             <label className="block text-sm text-slate-400 mb-1">Detective score (1–10)</label>
-                            <input
-                              type="range"
-                              min={1}
-                              max={10}
-                              value={interrogation.detective_probability ?? detectiveScore[interrogation.id] ?? 5}
-                              onChange={(e) => setDetectiveScore((p) => ({ ...p, [interrogation.id]: Number(e.target.value) }))}
-                              disabled={interrogation.detective_probability != null}
-                              className="w-full"
-                            />
-                            <span className="text-slate-200 ml-2">{interrogation.detective_probability ?? detectiveScore[interrogation.id] ?? '—'}</span>
-                            {interrogation.detective_probability == null && isDetective && caseData?.assigned_detective === user?.id && (
-                              <Button
-                                size="sm"
-                                className="mt-1"
-                                onClick={() =>
-                                  submitDetectiveScore.mutate({
-                                    id: interrogation.id,
-                                    guilt_score: detectiveScore[interrogation.id] ?? 5,
-                                  })
-                                }
-                                loading={submitDetectiveScore.isPending}
-                              >
-                                Submit my score
-                              </Button>
+                            {isDetective && caseData?.assigned_detective === user?.id ? (
+                              <>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={10}
+                                  value={interrogation.detective_probability ?? detectiveScore[interrogation.id] ?? 5}
+                                  onChange={(e) => setDetectiveScore((p) => ({ ...p, [interrogation.id]: Number(e.target.value) }))}
+                                  disabled={interrogation.detective_probability != null}
+                                  className="w-full"
+                                />
+                                <span className="text-slate-200 ml-2">{interrogation.detective_probability ?? detectiveScore[interrogation.id] ?? '—'}</span>
+                                {interrogation.detective_probability == null && (
+                                  <Button
+                                    size="sm"
+                                    className="mt-1"
+                                    onClick={() =>
+                                      submitDetectiveScore.mutate({
+                                        id: interrogation.id,
+                                        guilt_score: detectiveScore[interrogation.id] ?? 5,
+                                      })
+                                    }
+                                    loading={submitDetectiveScore.isPending}
+                                  >
+                                    Submit my score
+                                  </Button>
+                                )}
+                              </>
+                            ) : (
+                              <p className="text-slate-200">{interrogation.detective_probability != null ? interrogation.detective_probability : '—'}</p>
                             )}
                           </div>
+                          {/* Sergeant score: only sergeant can set; detective sees read-only */}
                           <div>
                             <label className="block text-sm text-slate-400 mb-1">Sergeant score (1–10)</label>
-                            <input
-                              type="range"
-                              min={1}
-                              max={10}
-                              value={interrogation.supervisor_probability ?? sergeantScore[interrogation.id] ?? 5}
-                              onChange={(e) => setSergeantScore((p) => ({ ...p, [interrogation.id]: Number(e.target.value) }))}
-                              disabled={interrogation.supervisor_probability != null}
-                              className="w-full"
-                            />
-                            <span className="text-slate-200 ml-2">{interrogation.supervisor_probability ?? sergeantScore[interrogation.id] ?? '—'}</span>
-                            {interrogation.supervisor_probability == null && isSergeant && (
-                              <Button
-                                size="sm"
-                                className="mt-1"
-                                onClick={() =>
-                                  submitSergeantScore.mutate({
-                                    id: interrogation.id,
-                                    guilt_score: sergeantScore[interrogation.id] ?? 5,
-                                  })
-                                }
-                                loading={submitSergeantScore.isPending}
-                              >
-                                Submit my score
-                              </Button>
+                            {isSergeant ? (
+                              <>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={10}
+                                  value={interrogation.supervisor_probability ?? sergeantScore[interrogation.id] ?? 5}
+                                  onChange={(e) => setSergeantScore((p) => ({ ...p, [interrogation.id]: Number(e.target.value) }))}
+                                  disabled={interrogation.supervisor_probability != null}
+                                  className="w-full"
+                                />
+                                <span className="text-slate-200 ml-2">{interrogation.supervisor_probability ?? sergeantScore[interrogation.id] ?? '—'}</span>
+                                {interrogation.supervisor_probability == null && (
+                                  <Button
+                                    size="sm"
+                                    className="mt-1"
+                                    onClick={() =>
+                                      submitSergeantScore.mutate({
+                                        id: interrogation.id,
+                                        guilt_score: sergeantScore[interrogation.id] ?? 5,
+                                      })
+                                    }
+                                    loading={submitSergeantScore.isPending}
+                                  >
+                                    Submit my score
+                                  </Button>
+                                )}
+                              </>
+                            ) : (
+                              <p className="text-slate-200">{interrogation.supervisor_probability != null ? interrogation.supervisor_probability : '—'}</p>
                             )}
                           </div>
                         </div>

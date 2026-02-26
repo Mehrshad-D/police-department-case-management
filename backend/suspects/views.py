@@ -269,19 +269,29 @@ class InterrogationChiefConfirmView(APIView):
 
 
 def _apply_captain_decision(captain_decision):
-    """Update suspect and case status after captain decision (and chief approval if CRITICAL)."""
+    """Update suspect and case status after captain decision (and chief approval if CRITICAL). If GUILTY, refer case to court (create Trial)."""
+    from cases.models import Case
+    from judiciary.models import Trial
+
     suspect = captain_decision.suspect
     case = captain_decision.case
     if captain_decision.final_decision == CaptainDecision.DECISION_GUILTY:
         suspect.status = Suspect.STATUS_ARRESTED  # remains arrested, sent to trial
         suspect.save(update_fields=['status'])
-        # Case can be referred to judiciary by captain/chief separately
+        # Send case to court: create Trial so judge can see and record verdict
+        trial, created = Trial.objects.get_or_create(
+            case=case,
+            defaults={'suspect': suspect},
+        )
+        if not created and not trial.suspect_id:
+            trial.suspect = suspect
+            trial.save(update_fields=['suspect'])
+        case.status = Case.STATUS_REFERRED_TO_JUDICIARY
+        case.save(update_fields=['status', 'updated_at'])
     else:
         suspect.mark_released()
-    # Optionally update case status
-    from cases.models import Case
-    if case.status == Case.STATUS_UNDER_INVESTIGATION:
-        case.save(update_fields=['updated_at'])
+        if case.status == Case.STATUS_UNDER_INVESTIGATION:
+            case.save(update_fields=['updated_at'])
 
 
 class CaptainDecisionListCreateView(APIView):
