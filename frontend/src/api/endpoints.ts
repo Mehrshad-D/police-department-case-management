@@ -9,13 +9,17 @@ import type {
   Suspect,
   MostWantedItem,
   Interrogation,
+  CaptainDecision,
+  ChiefApproval,
   Trial,
   TrialFullDetail,
+  TrialFullDataByCase,
   Verdict,
   Notification,
   Statistics,
   Tip,
   Reward,
+  RewardVerifyResponse,
   PaginatedResponse,
   ApiSuccess,
 } from '@/types'
@@ -162,13 +166,29 @@ export const mostWantedApi = {
 
 // Interrogations
 export const interrogationsApi = {
-  list: (params?: { suspect?: number }) =>
+  list: (params?: { suspect?: number; case?: number }) =>
     apiClient.get<PaginatedResponse<Interrogation> | Interrogation[]>('interrogations/', { params }).then((res) => res.data),
   create: (data: { suspect: number; detective_probability?: number; supervisor_probability?: number }) =>
     apiClient.post<Interrogation>('interrogations/', data).then((res) => res.data),
+  submitDetectiveScore: (id: number, data: { guilt_score: number; notes?: string }) =>
+    apiClient.post<ApiSuccess<Interrogation>>(`interrogations/${id}/submit-detective-score/`, data).then((res) => res.data),
+  submitSergeantScore: (id: number, data: { guilt_score: number; notes?: string }) =>
+    apiClient.post<ApiSuccess<Interrogation>>(`interrogations/${id}/submit-sergeant-score/`, data).then((res) => res.data),
   captainDecision: (id: number, captain_decision: string) =>
     apiClient.post(`interrogations/${id}/captain-decision/`, { captain_decision }).then((res) => res.data),
   chiefConfirm: (id: number) => apiClient.post(`interrogations/${id}/chief-confirm/`).then((res) => res.data),
+}
+
+// Captain decisions & Chief approval
+export const captainDecisionsApi = {
+  list: (params?: { suspect?: number; case?: number }) =>
+    apiClient.get<{ results: CaptainDecision[] }>('captain-decisions/', { params }).then((res) => res.data.results ?? []),
+  create: (data: { suspect_id: number; case_id: number; final_decision: 'guilty' | 'not_guilty'; reasoning?: string }) =>
+    apiClient.post<ApiSuccess<CaptainDecision>>('captain-decisions/', data).then((res) => res.data),
+}
+export const chiefApprovalApi = {
+  create: (captainDecisionId: number, data: { status: 'approved' | 'rejected'; comment?: string }) =>
+    apiClient.post<ApiSuccess<ChiefApproval>>(`captain-decisions/${captainDecisionId}/chief-approval/`, data).then((res) => res.data),
 }
 
 // Trials & Verdicts
@@ -176,6 +196,8 @@ export const trialsApi = {
   list: () => apiClient.get<PaginatedResponse<Trial> | Trial[]>('trials/').then((res) => res.data),
   get: (id: number) => apiClient.get<Trial>(`trials/${id}/`).then((res) => res.data),
   getFull: (id: number) => apiClient.get<TrialFullDetail>(`trials/${id}/full/`).then((res) => res.data),
+  getFullByCase: (caseId: number) =>
+    apiClient.get<TrialFullDataByCase>(`trials/full-by-case/${caseId}/`).then((res) => res.data),
   create: (data: { case: number; judge?: number }) => apiClient.post<Trial>('trials/', data).then((res) => res.data),
   update: (id: number, data: Partial<Trial>) => apiClient.patch<Trial>(`trials/${id}/`, data).then((res) => res.data),
 }
@@ -196,7 +218,7 @@ export const verdictsApi = {
 export const tipsApi = {
   list: () =>
     apiClient.get<PaginatedResponse<Tip> | Tip[]>('tips/').then((res) => res.data),
-  create: (data: { case?: number; title: string; description: string }) =>
+  create: (data: { case?: number; suspect?: number; title: string; description: string }) =>
     apiClient.post<Tip>('tips/', data).then((res) => res.data),
   officerReview: (id: number, action: 'approve' | 'reject', message?: string) =>
     apiClient.post<ApiSuccess<Tip>>(`tips/${id}/officer-review/`, { action, message }).then((res) => res.data),
@@ -212,6 +234,10 @@ export const tipsApi = {
 export const rewardsApi = {
   lookup: (national_id: string, code: string) =>
     apiClient.post<ApiSuccess<Reward>>('rewards/lookup/', { national_id, code }).then((res) => res.data.data),
+  verify: (national_id: string, code: string) =>
+    apiClient
+      .post<{ success: true; data: RewardVerifyResponse }>('rewards/verify/', { national_id, code })
+      .then((res) => res.data.data),
   redeem: (national_id: string, code: string) =>
     apiClient.post<ApiSuccess<Reward>>('rewards/redeem/', { national_id, code }).then((res) => res.data.data),
 }

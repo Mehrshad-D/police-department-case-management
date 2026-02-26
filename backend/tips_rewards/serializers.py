@@ -8,7 +8,7 @@ class TipListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tip
         fields = [
-            'id', 'submitter', 'submitter_username', 'case', 'title', 'description',
+            'id', 'submitter', 'submitter_username', 'case', 'suspect', 'title', 'description',
             'status', 'reviewed_by_officer', 'reviewed_by_detective', 'created_at', 'updated_at',
         ]
 
@@ -16,7 +16,7 @@ class TipListSerializer(serializers.ModelSerializer):
 class TipCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tip
-        fields = ['case', 'title', 'description']
+        fields = ['case', 'suspect', 'title', 'description']
 
     def create(self, validated_data):
         validated_data['submitter'] = self.context['request'].user

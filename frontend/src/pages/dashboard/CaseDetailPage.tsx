@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCase, useCaseUpdate, useCaseSubmitSuspectsToSergeant } from '@/hooks/useCases'
 import { useSuspectsList, useSuspectPropose, useSuspectSupervisorReview } from '@/hooks/useSuspects'
-import { usersApi } from '@/api/endpoints'
+import { usersApi, interrogationsApi } from '@/api/endpoints'
 import { useAuthStore } from '@/store/authStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { formatDate } from '@/utils/format'
 import { getApiErrorMessage } from '@/api/client'
-import type { Suspect } from '@/types'
+import type { Suspect, Interrogation } from '@/types'
 
 function ensureArray<T>(data: T[] | { results: T[] }): T[] {
   return Array.isArray(data) ? data : (data as { results: T[] }).results ?? []
@@ -25,6 +25,7 @@ const SEVERITY_MAP: Record<number, string> = {
 
 const STATUS_WAITING_SERGEANT = 'waiting_sergeant_approval'
 const STATUS_UNDER_INVESTIGATION = 'under_investigation'
+const STATUS_ARRESTED = 'arrested'
 
 export function CaseDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -36,6 +37,8 @@ export function CaseDetailPage() {
   const [selectedSeverity, setSelectedSeverity] = useState<number>(3)
   const [addSuspectUserId, setAddSuspectUserId] = useState<number | ''>('')
   const [rejectMessage, setRejectMessage] = useState<Record<number, string>>({})
+  const [detectiveScore, setDetectiveScore] = useState<Record<number, number>>({})
+  const [sergeantScore, setSergeantScore] = useState<Record<number, number>>({})
 
   const { data: detectivesData } = useQuery({
     queryKey: ['detectives'],
@@ -53,6 +56,31 @@ export function CaseDetailPage() {
   const submitToSergeant = useCaseSubmitSuspectsToSergeant(caseId ?? 0)
   const proposeSuspect = useSuspectPropose()
   const supervisorReview = useSuspectSupervisorReview()
+  const qc = useQueryClient()
+  const { data: interrogationsData } = useQuery({
+    queryKey: ['interrogations', caseId],
+    queryFn: () => interrogationsApi.list({ case: caseId ?? undefined }),
+    enabled: caseId != null,
+  })
+  const interrogationsList = interrogationsData
+    ? Array.isArray(interrogationsData)
+      ? interrogationsData
+      : (interrogationsData as { results?: Interrogation[] }).results ?? []
+    : []
+  const createInterrogation = useMutation({
+    mutationFn: (suspectId: number) => interrogationsApi.create({ suspect: suspectId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['interrogations'] }),
+  })
+  const submitDetectiveScore = useMutation({
+    mutationFn: ({ id, guilt_score, notes }: { id: number; guilt_score: number; notes?: string }) =>
+      interrogationsApi.submitDetectiveScore(id, { guilt_score, notes }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['interrogations'] }),
+  })
+  const submitSergeantScore = useMutation({
+    mutationFn: ({ id, guilt_score, notes }: { id: number; guilt_score: number; notes?: string }) =>
+      interrogationsApi.submitSergeantScore(id, { guilt_score, notes }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['interrogations'] }),
+  })
 
   const isDetective = user?.role_names?.some((r) => r.toLowerCase() === 'detective')
   const isSergeant = user?.role_names?.some((r) => r.toLowerCase() === 'sergeant')
@@ -287,6 +315,95 @@ export function CaseDetailPage() {
               ))}
             </ul>
           </div>
+
+          {/* Interrogation panel (arrested suspects) */}
+          {suspects.filter((s) => s.status === STATUS_ARRESTED).length > 0 && (
+            <div className="mt-6 pt-6 border-t border-slate-700">
+              <CardTitle className="text-base mb-3">Interrogation (guilt score 1–10)</CardTitle>
+              <p className="text-slate-500 text-sm mb-4">
+                Detective and Sergeant each assign a score. Only the assigned detective and a Sergeant can submit.
+              </p>
+              {suspects
+                .filter((s) => s.status === STATUS_ARRESTED)
+                .map((s) => {
+                  const interrogation = interrogationsList.find((i: Interrogation) => i.suspect === s.id)
+                  return (
+                    <div key={s.id} className="rounded-lg bg-slate-800/50 p-4 mb-4">
+                      <p className="font-medium text-slate-200 mb-2">{s.user_full_name || s.user_username}</p>
+                      {!interrogation ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => createInterrogation.mutate(s.id)}
+                          loading={createInterrogation.isPending}
+                        >
+                          Start interrogation
+                        </Button>
+                      ) : (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Detective score (1–10)</label>
+                            <input
+                              type="range"
+                              min={1}
+                              max={10}
+                              value={interrogation.detective_probability ?? detectiveScore[interrogation.id] ?? 5}
+                              onChange={(e) => setDetectiveScore((p) => ({ ...p, [interrogation.id]: Number(e.target.value) }))}
+                              disabled={interrogation.detective_probability != null}
+                              className="w-full"
+                            />
+                            <span className="text-slate-200 ml-2">{interrogation.detective_probability ?? detectiveScore[interrogation.id] ?? '—'}</span>
+                            {interrogation.detective_probability == null && isDetective && caseData?.assigned_detective === user?.id && (
+                              <Button
+                                size="sm"
+                                className="mt-1"
+                                onClick={() =>
+                                  submitDetectiveScore.mutate({
+                                    id: interrogation.id,
+                                    guilt_score: detectiveScore[interrogation.id] ?? 5,
+                                  })
+                                }
+                                loading={submitDetectiveScore.isPending}
+                              >
+                                Submit my score
+                              </Button>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Sergeant score (1–10)</label>
+                            <input
+                              type="range"
+                              min={1}
+                              max={10}
+                              value={interrogation.supervisor_probability ?? sergeantScore[interrogation.id] ?? 5}
+                              onChange={(e) => setSergeantScore((p) => ({ ...p, [interrogation.id]: Number(e.target.value) }))}
+                              disabled={interrogation.supervisor_probability != null}
+                              className="w-full"
+                            />
+                            <span className="text-slate-200 ml-2">{interrogation.supervisor_probability ?? sergeantScore[interrogation.id] ?? '—'}</span>
+                            {interrogation.supervisor_probability == null && isSergeant && (
+                              <Button
+                                size="sm"
+                                className="mt-1"
+                                onClick={() =>
+                                  submitSergeantScore.mutate({
+                                    id: interrogation.id,
+                                    guilt_score: sergeantScore[interrogation.id] ?? 5,
+                                  })
+                                }
+                                loading={submitSergeantScore.isPending}
+                              >
+                                Submit my score
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -7,11 +7,18 @@ from django.conf import settings
 
 
 class Trial(models.Model):
-    """Case referred to judiciary; judge records verdict and punishment."""
+    """Case referred to judiciary; judge records verdict and punishment. Optional suspect_id for guilty suspect."""
     case = models.OneToOneField(
         'cases.Case',
         on_delete=models.CASCADE,
         related_name='trial',
+    )
+    suspect = models.ForeignKey(
+        'suspects.Suspect',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='trials',
     )
     judge = models.ForeignKey(
         settings.AUTH_USER_MODEL,

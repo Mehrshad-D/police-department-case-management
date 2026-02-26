@@ -9,7 +9,14 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 
 from .models import Trial, Verdict
-from .serializers import TrialSerializer, VerdictSerializer, VerdictCreateSerializer, TrialFullDetailSerializer
+from .serializers import (
+    TrialSerializer,
+    VerdictSerializer,
+    VerdictCreateSerializer,
+    TrialFullDetailSerializer,
+    TrialFullDataByCaseSerializer,
+)
+from cases.models import Case
 from accounts.permissions import IsJudge, CanReferCaseToJudiciary
 from core.utils import log_audit
 
@@ -44,6 +51,16 @@ class TrialFullDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated, IsJudge]
     queryset = Trial.objects.all()
     serializer_class = TrialFullDetailSerializer
+
+
+class TrialFullDataByCaseView(APIView):
+    """GET /api/trials/full-by-case/<case_id>/ — Judge: full case data by case_id (interrogations, captain decisions, chief approvals)."""
+    permission_classes = [IsAuthenticated, IsJudge]
+
+    def get(self, request, case_id):
+        case = get_object_or_404(Case, pk=case_id)
+        serializer = TrialFullDataByCaseSerializer(instance=case)
+        return Response(serializer.data)
 
 
 class VerdictListCreateView(generics.ListCreateAPIView):

@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 
-from .models import Tip, Reward
+from .models import Tip, Reward, RewardPayment
 from .serializers import TipListSerializer, TipCreateSerializer, RewardSerializer, RewardClaimLookupSerializer
 from accounts.permissions import IsPoliceOfficer, IsDetective, IsOfficerOrAbove, has_any_role
 from core.utils import log_audit, notify
@@ -139,5 +139,58 @@ class RewardRedeemView(APIView):
         reward.claimed = True
         reward.claimed_at = timezone.now()
         reward.save(update_fields=['claimed', 'claimed_at'])
+        RewardPayment.objects.create(
+            reward=reward,
+            officer=request.user,
+            amount_rials=reward.amount_rials,
+        )
         log_audit(request.user, 'update', 'Reward', reward.pk, 'Reward redeemed at police office')
         return Response({'success': True, 'data': RewardSerializer(reward).data, 'message': 'Reward redeemed.'})
+
+
+class RewardVerifyView(APIView):
+    """POST /api/rewards/verify — Police: verify reward by national_id + code. Returns user info, amount, case/suspect info, payment status."""
+    permission_classes = [IsAuthenticated, IsOfficerOrAbove]
+
+    def post(self, request):
+        ser = RewardClaimLookupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        reward = Reward.objects.select_related('tip', 'tip__submitter', 'tip__case', 'suspect', 'suspect__case').filter(
+            recipient_national_id=ser.validated_data['national_id'],
+            unique_code=ser.validated_data['code'],
+        ).first()
+        if not reward:
+            return Response(
+                {'success': False, 'error': {'message': 'No reward found for this national ID and code.'}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        user_info = None
+        case_info = None
+        suspect_info = None
+        if reward.tip_id:
+            user_info = {
+                'id': reward.tip.submitter_id,
+                'username': reward.tip.submitter.username,
+                'full_name': reward.tip.submitter.full_name,
+                'national_id': reward.tip.submitter.national_id,
+            }
+            if reward.tip.case_id:
+                case_info = {'id': reward.tip.case_id, 'title': reward.tip.case.title}
+            if reward.tip.suspect_id:
+                suspect_info = {'id': reward.tip.suspect_id, 'case_id': reward.tip.suspect.case_id}
+        if reward.suspect_id and not suspect_info:
+            suspect_info = {'id': reward.suspect_id, 'case_id': reward.suspect.case_id}
+        payment_status = 'paid' if reward.claimed else 'unpaid'
+        payments = list(reward.payments.values('id', 'amount_rials', 'paid_at', 'officer_id').order_by('-paid_at')[:1])
+        return Response({
+            'success': True,
+            'data': {
+                'reward': RewardSerializer(reward).data,
+                'user_info': user_info,
+                'reward_amount': reward.amount_rials,
+                'case_info': case_info,
+                'suspect_info': suspect_info,
+                'payment_status': payment_status,
+                'payment_record': payments[0] if payments else None,
+            },
+        })

@@ -17,7 +17,11 @@ import { HighPriorityPage } from '@/pages/dashboard/HighPriorityPage'
 import { ReportsPage } from '@/pages/dashboard/ReportsPage'
 import { DocumentsPage } from '@/pages/dashboard/DocumentsPage'
 import { TipsPage } from '@/pages/dashboard/TipsPage'
+import { CaptainDecisionPage } from '@/pages/dashboard/CaptainDecisionPage'
+import { ChiefApprovalPage } from '@/pages/dashboard/ChiefApprovalPage'
+import { RewardVerifyPage } from '@/pages/dashboard/RewardVerifyPage'
 import { TrialsPage } from '@/pages/dashboard/TrialsPage'
+import { SubmitTipPage } from '@/pages/SubmitTipPage'
 import { AdminPage } from '@/pages/dashboard/AdminPage'
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
@@ -45,6 +49,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/', element: <HomePage /> },
       { path: '/most-wanted', element: <MostWantedPage /> },
+      { path: '/submit-tip', element: <SubmitTipPage /> },
       { path: '/login', element: <LoginPage /> },
       { path: '/register', element: <RegisterPage /> },
       {
@@ -62,6 +67,9 @@ const router = createBrowserRouter([
       { path: 'reports/:id', element: <ReportsPage /> },
       { path: 'documents', element: <DocumentsPage /> },
       { path: 'tips', element: <TipsPage /> },
+      { path: 'captain-decision', element: <CaptainDecisionPage /> },
+      { path: 'chief-approval', element: <ChiefApprovalPage /> },
+      { path: 'reward-verify', element: <RewardVerifyPage /> },
       { path: 'trials', element: <TrialsPage /> },
       { path: 'trials/:id', element: <TrialsPage /> },
       { path: 'admin', element: <ProtectedRoute roles={['System Administrator']}><AdminPage /></ProtectedRoute> },

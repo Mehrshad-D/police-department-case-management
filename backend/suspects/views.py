@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
-from .models import Suspect, Interrogation, ArrestOrder
+from .models import Suspect, Interrogation, ArrestOrder, CaptainDecision, ChiefApproval
 from cases.models import Case
 from .serializers import (
     SuspectListSerializer,
@@ -18,6 +18,11 @@ from .serializers import (
     InterrogationSerializer,
     InterrogationCreateSerializer,
     InterrogationCaptainDecisionSerializer,
+    InterrogationSubmitScoreSerializer,
+    CaptainDecisionSerializer,
+    CaptainDecisionCreateSerializer,
+    ChiefApprovalSerializer,
+    ChiefApprovalCreateSerializer,
     ArrestOrderSerializer,
 )
 from accounts.permissions import IsDetective, IsSupervisor, IsCaptain, IsPoliceChief
@@ -142,20 +147,88 @@ class SuspectSupervisorReviewView(APIView):
 
 
 class InterrogationListCreateView(generics.ListCreateAPIView):
+    """List/create interrogations. Create creates record; use submit-detective-score/submit-sergeant-score for scores."""
     permission_classes = [IsAuthenticated]
     serializer_class = InterrogationSerializer
 
     def get_queryset(self):
-        qs = Interrogation.objects.all()
+        qs = Interrogation.objects.select_related('suspect', 'suspect__case')
         suspect_id = self.request.query_params.get('suspect')
+        case_id = self.request.query_params.get('case')
         if suspect_id:
             qs = qs.filter(suspect_id=suspect_id)
+        if case_id:
+            qs = qs.filter(suspect__case_id=case_id)
         return qs.order_by('-created_at')
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return InterrogationCreateSerializer
         return InterrogationSerializer
+
+
+def _notify_captain_when_both_scores(interrogation):
+    """When both detective and supervisor scores exist, notify captain."""
+    if interrogation.detective_probability is not None and interrogation.supervisor_probability is not None:
+        for u in User.objects.filter(roles__name='Captain'):
+            notify(
+                u,
+                'Interrogation scores ready',
+                f'Case #{interrogation.suspect.case_id} suspect ready for captain decision.',
+                'interrogation_ready',
+                'Interrogation',
+                interrogation.pk,
+            )
+
+
+class InterrogationSubmitDetectiveScoreView(APIView):
+    """Only the detective assigned to the case can submit detective guilt score (1-10). One score per suspect."""
+    permission_classes = [IsAuthenticated, IsDetective]
+
+    def post(self, request, pk):
+        interrogation = get_object_or_404(Interrogation, pk=pk)
+        case = interrogation.suspect.case
+        if case.assigned_detective_id != request.user.id:
+            return Response(
+                {'success': False, 'error': {'message': 'Only the detective assigned to this case can submit the detective score.'}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if interrogation.detective_probability is not None:
+            return Response(
+                {'success': False, 'error': {'message': 'Detective score already submitted for this suspect.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ser = InterrogationSubmitScoreSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        interrogation.detective_probability = ser.validated_data['guilt_score']
+        if ser.validated_data.get('notes'):
+            interrogation.notes = (interrogation.notes or '') + (' Detective: ' + ser.validated_data['notes'])
+        interrogation.save(update_fields=['detective_probability', 'notes', 'updated_at'])
+        log_audit(request.user, 'update', 'Interrogation', interrogation.pk, f'Detective score {interrogation.detective_probability} submitted')
+        _notify_captain_when_both_scores(interrogation)
+        return Response({'success': True, 'data': InterrogationSerializer(interrogation).data})
+
+
+class InterrogationSubmitSergeantScoreView(APIView):
+    """Only a Sergeant can submit sergeant guilt score (1-10). One score per suspect."""
+    permission_classes = [IsAuthenticated, IsSupervisor]
+
+    def post(self, request, pk):
+        interrogation = get_object_or_404(Interrogation, pk=pk)
+        if interrogation.supervisor_probability is not None:
+            return Response(
+                {'success': False, 'error': {'message': 'Sergeant score already submitted for this suspect.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ser = InterrogationSubmitScoreSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        interrogation.supervisor_probability = ser.validated_data['guilt_score']
+        if ser.validated_data.get('notes'):
+            interrogation.notes = (interrogation.notes or '') + (' Sergeant: ' + ser.validated_data['notes'])
+        interrogation.save(update_fields=['supervisor_probability', 'notes', 'updated_at'])
+        log_audit(request.user, 'update', 'Interrogation', interrogation.pk, f'Sergeant score {interrogation.supervisor_probability} submitted')
+        _notify_captain_when_both_scores(interrogation)
+        return Response({'success': True, 'data': InterrogationSerializer(interrogation).data})
 
 
 class InterrogationCaptainDecisionView(APIView):
@@ -182,6 +255,7 @@ class InterrogationCaptainDecisionView(APIView):
 
 
 class InterrogationChiefConfirmView(APIView):
+    """Police Chief confirms for critical crimes (legacy interrogation flow)."""
     permission_classes = [IsAuthenticated, IsPoliceChief]
 
     def post(self, request, pk):
@@ -192,6 +266,88 @@ class InterrogationChiefConfirmView(APIView):
         interrogation.save()
         log_audit(request.user, 'approve', 'Interrogation', interrogation.pk, 'Confirmed')
         return Response({'success': True, 'data': InterrogationSerializer(interrogation).data})
+
+
+def _apply_captain_decision(captain_decision):
+    """Update suspect and case status after captain decision (and chief approval if CRITICAL)."""
+    suspect = captain_decision.suspect
+    case = captain_decision.case
+    if captain_decision.final_decision == CaptainDecision.DECISION_GUILTY:
+        suspect.status = Suspect.STATUS_ARRESTED  # remains arrested, sent to trial
+        suspect.save(update_fields=['status'])
+        # Case can be referred to judiciary by captain/chief separately
+    else:
+        suspect.mark_released()
+    # Optionally update case status
+    from cases.models import Case
+    if case.status == Case.STATUS_UNDER_INVESTIGATION:
+        case.save(update_fields=['updated_at'])
+
+
+class CaptainDecisionListCreateView(APIView):
+    """Captain creates final decision (GUILTY/NOT_GUILTY). CRITICAL cases require chief approval before applying."""
+    permission_classes = [IsAuthenticated, IsCaptain]
+
+    def get(self, request):
+        qs = CaptainDecision.objects.select_related('suspect', 'case', 'decided_by').order_by('-created_at')
+        suspect_id = request.query_params.get('suspect')
+        case_id = request.query_params.get('case')
+        if suspect_id:
+            qs = qs.filter(suspect_id=suspect_id)
+        if case_id:
+            qs = qs.filter(case_id=case_id)
+        data = CaptainDecisionSerializer(qs, many=True).data
+        return Response({'results': data})
+
+    def post(self, request):
+        ser = CaptainDecisionCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        suspect = get_object_or_404(Suspect, pk=ser.validated_data['suspect_id'])
+        case = suspect.case
+        if case.id != ser.validated_data['case_id']:
+            return Response(
+                {'success': False, 'error': {'message': 'Case does not match suspect.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        cap = CaptainDecision.objects.create(
+            suspect=suspect,
+            case=case,
+            final_decision=ser.validated_data['final_decision'],
+            reasoning=ser.validated_data.get('reasoning', ''),
+            decided_by=request.user,
+        )
+        log_audit(request.user, 'create', 'CaptainDecision', cap.pk, f'Decision: {cap.final_decision}')
+        if case.severity == Case.SEVERITY_CRISIS:
+            for u in User.objects.filter(roles__name='Police Chief'):
+                notify(u, 'Chief approval required', f'Case #{case.pk} captain decision for suspect', 'chief_approval_required', 'CaptainDecision', cap.pk)
+            return Response({'success': True, 'data': CaptainDecisionSerializer(cap).data, 'requires_chief_approval': True})
+        _apply_captain_decision(cap)
+        return Response({'success': True, 'data': CaptainDecisionSerializer(cap).data})
+
+
+class ChiefApprovalView(APIView):
+    """Police Chief approves or rejects captain decision (for CRITICAL severity cases)."""
+    permission_classes = [IsAuthenticated, IsPoliceChief]
+
+    def post(self, request, pk):
+        captain_decision = get_object_or_404(CaptainDecision, pk=pk)
+        if getattr(captain_decision, 'chief_approval', None):
+            return Response(
+                {'success': False, 'error': {'message': 'Chief has already decided on this captain decision.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ser = ChiefApprovalCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        approval = ChiefApproval.objects.create(
+            captain_decision=captain_decision,
+            status=ser.validated_data['status'],
+            comment=ser.validated_data.get('comment', ''),
+            approved_by=request.user,
+        )
+        log_audit(request.user, 'approve' if approval.status == ChiefApproval.STATUS_APPROVED else 'reject', 'ChiefApproval', approval.pk, approval.status)
+        if approval.status == ChiefApproval.STATUS_APPROVED:
+            _apply_captain_decision(captain_decision)
+        return Response({'success': True, 'data': ChiefApprovalSerializer(approval).data})
 
 
 class ArrestOrderListCreateView(generics.ListCreateAPIView):

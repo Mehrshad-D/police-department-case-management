@@ -2,7 +2,7 @@
 Suspect, Interrogation, ArrestOrder serializers. Ranking and reward calculation.
 """
 from rest_framework import serializers
-from .models import Suspect, Interrogation, ArrestOrder
+from .models import Suspect, Interrogation, ArrestOrder, CaptainDecision, ChiefApproval
 
 
 class SuspectListSerializer(serializers.ModelSerializer):
@@ -69,12 +69,15 @@ class SuspectSupervisorReviewSerializer(serializers.Serializer):
 
 
 class InterrogationSerializer(serializers.ModelSerializer):
+    case_id = serializers.IntegerField(source='suspect.case_id', read_only=True)
+
     class Meta:
         model = Interrogation
         fields = [
-            'id', 'suspect', 'detective_probability', 'supervisor_probability',
+            'id', 'suspect', 'case_id', 'detective_probability', 'supervisor_probability',
             'captain_decision', 'captain_decided_by', 'captain_decided_at',
-            'chief_confirmed', 'chief_confirmed_at', 'created_at', 'updated_at',
+            'chief_confirmed', 'chief_confirmed_at', 'notes',
+            'created_at', 'updated_at',
         ]
 
 
@@ -86,6 +89,48 @@ class InterrogationCreateSerializer(serializers.ModelSerializer):
 
 class InterrogationCaptainDecisionSerializer(serializers.Serializer):
     captain_decision = serializers.CharField()
+
+
+class InterrogationSubmitScoreSerializer(serializers.Serializer):
+    """Guilt score 1-10, optional notes."""
+    guilt_score = serializers.IntegerField(min_value=1, max_value=10)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class CaptainDecisionSerializer(serializers.ModelSerializer):
+    case_severity = serializers.IntegerField(source='case.severity', read_only=True)
+    has_chief_approval = serializers.SerializerMethodField()
+    chief_approval = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CaptainDecision
+        fields = ['id', 'suspect', 'case', 'case_severity', 'final_decision', 'reasoning', 'decided_by', 'created_at', 'has_chief_approval', 'chief_approval']
+
+    def get_has_chief_approval(self, obj):
+        return hasattr(obj, 'chief_approval') and obj.chief_approval is not None
+
+    def get_chief_approval(self, obj):
+        if hasattr(obj, 'chief_approval') and obj.chief_approval:
+            return ChiefApprovalSerializer(obj.chief_approval).data
+        return None
+
+
+class CaptainDecisionCreateSerializer(serializers.Serializer):
+    suspect_id = serializers.IntegerField()
+    case_id = serializers.IntegerField()
+    final_decision = serializers.ChoiceField(choices=['guilty', 'not_guilty'])
+    reasoning = serializers.CharField(required=False, allow_blank=True)
+
+
+class ChiefApprovalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChiefApproval
+        fields = ['id', 'captain_decision', 'status', 'comment', 'approved_by', 'created_at']
+
+
+class ChiefApprovalCreateSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=['approved', 'rejected'])
+    comment = serializers.CharField(required=False, allow_blank=True)
 
 
 class MostWantedPublicSerializer(serializers.ModelSerializer):
