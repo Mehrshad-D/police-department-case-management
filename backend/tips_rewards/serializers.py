@@ -32,12 +32,11 @@ class RewardSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['unique_code']
 
+class RewardClaimSerializer(serializers.Serializer):
+    national_id = serializers.CharField()
+    code = serializers.CharField()
 
 class RewardClaimLookupSerializer(serializers.Serializer):
     """Police view reward info using national_id + code."""
-    national_id = serializers.CharField()
-    code = serializers.CharField()
-    
-class RewardClaimSerializer(serializers.Serializer):
     national_id = serializers.CharField()
     code = serializers.CharField()
