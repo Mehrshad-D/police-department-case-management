@@ -14,6 +14,8 @@ from .models import Tip, Reward
 from .serializers import TipListSerializer, TipCreateSerializer, RewardSerializer, RewardClaimLookupSerializer
 from accounts.permissions import IsPoliceOfficer, IsDetective, IsOfficerOrAbove, has_any_role
 from core.utils import log_audit, notify
+from django.utils import timezone
+from .serializers import RewardClaimSerializer
 
 User = get_user_model()
 
@@ -104,3 +106,60 @@ class RewardLookupView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response({'success': True, 'data': RewardSerializer(reward).data})
+    
+class RewardClaimView(APIView):
+    """
+    Police enters national_id + unique code to mark reward as claimed.
+    """
+    permission_classes = [IsAuthenticated, IsOfficerOrAbove]
+
+    def post(self, request):
+        serializer = RewardClaimSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        national_id = serializer.validated_data['national_id']
+        code = serializer.validated_data['code']
+
+        reward = Reward.objects.filter(
+            recipient_national_id=national_id,
+            unique_code=code
+        ).select_related('tip__submitter').first()
+
+        if not reward:
+            return Response(
+                {
+                    'success': False,
+                    'error': {'message': 'Invalid national ID or reward code.'}
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if reward.claimed:
+            return Response(
+                {
+                    'success': False,
+                    'error': {'message': 'Reward has already been claimed.'}
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        reward.claimed = True
+        reward.claimed_at = timezone.now()
+        reward.save()
+
+        log_audit(
+            request.user,
+            'update',
+            'Reward',
+            reward.pk,
+            f'Reward claimed by police officer {request.user.username}'
+        )
+
+        return Response({
+            'success': True,
+            'data': {
+                'reward': RewardSerializer(reward).data,
+                'citizen_username': reward.tip.submitter.username if reward.tip else None,
+                'citizen_national_id': reward.recipient_national_id,
+            }
+        })

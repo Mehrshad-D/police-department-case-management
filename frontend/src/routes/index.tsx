@@ -16,6 +16,8 @@ import { HighPriorityPage } from '@/pages/dashboard/HighPriorityPage'
 import { ReportsPage } from '@/pages/dashboard/ReportsPage'
 import { DocumentsPage } from '@/pages/dashboard/DocumentsPage'
 import { AdminPage } from '@/pages/dashboard/AdminPage'
+import { TipsPage } from '@/pages/tips/TipsPage'
+import { RewardClaimPage } from '@/pages/rewards/RewardClaimPage'
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
   const user = useAuthStore((s) => s.user)
@@ -47,6 +49,8 @@ const router = createBrowserRouter([
         path: '/dashboard',
         element: dashboardElement,
         children: [
+      { path: 'tips', element: <TipsPage /> },
+      { path: 'rewards/claim', element: <RewardClaimPage /> },
       { index: true, element: <DashboardOverviewPage /> },
       { path: 'cases', element: <CasesPage /> },
       { path: 'cases/:id', element: <CaseDetailPage /> },

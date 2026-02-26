@@ -15,7 +15,6 @@ import type {
   PaginatedResponse,
   ApiSuccess,
 } from '@/types'
-
 const unwrap = <T>(res: { data: ApiSuccess<T> }) => res.data.data
 
 // Auth
@@ -169,4 +168,22 @@ export const notificationsApi = {
   list: () =>
     apiClient.get<PaginatedResponse<Notification> | Notification[]>('notifications/').then((res) => res.data),
   markRead: (id: number) => apiClient.post(`notifications/${id}/read/`).then((res) => res.data),
+}
+
+// Tips
+export const tipsApi = {
+  list: () =>
+    apiClient.get('tips/').then((res) => res.data),
+
+  officerReview: (id: number) =>
+    apiClient.post(`tips/${id}/officer-review/`).then((res) => res.data),
+
+  detectiveConfirm: (id: number, amount_rials: number) =>
+    apiClient.post(`tips/${id}/detective-confirm/`, { amount_rials }).then((res) => res.data),
+}
+
+// Reward claim
+export const rewardsApi = {
+  claim: (data: { national_id: string; code: string }) =>
+    apiClient.post('rewards/claim/', data).then((res) => res.data),
 }
