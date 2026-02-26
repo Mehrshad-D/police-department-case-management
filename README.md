@@ -1,11 +1,12 @@
 # Police Department Case Management System
 
-Full-stack project: **backend** (Django REST Framework) and **frontend** (React + TypeScript + Vite).
+Full-stack project: **backend** (Django REST Framework) and **frontend** (React + TypeScript + Vite) for digitized police operations — cases, complaints, evidence, suspects, interrogations, captain/chief decisions, trials & verdicts, tips & rewards, and payments.
 
 ## Structure
 
-- **`backend/`** — Django API (port 8000). See [backend/README.md](backend/README.md).
+- **`backend/`** — Django REST API (port 8000). See [backend/README.md](backend/README.md).
 - **`frontend/`** — React SPA (port 3000). See [frontend/README.md](frontend/README.md).
+- **`SCENARIO.md`** — Step-by-step testing scenario (complaints, cases, evidence, suspects, reports, trials).
 
 ## Quick start
 
