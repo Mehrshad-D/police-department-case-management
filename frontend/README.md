@@ -75,18 +75,65 @@ Then set the frontend to proxy `/api` to `http://backend:8000` (see Dockerfile n
 - `src/types` — TypeScript types
 - `src/utils` — helpers
 
-## Pages
+## Structure
 
-- **Home** — intro, stats from API
-- **Auth** — login (identifier + password), register
-- **Dashboard** — role-based modules (cases, complaints, board, high-priority, reports, documents, trials, admin)
-- **Detective Board** — draggable evidence cards, SVG connections, export as image
-- **High Priority** — suspects list and detail
-- **Cases & Complaints** — list, detail, approve/reject flows
-- **Reports** — case report, printable
-- **Documents** — evidence list/upload by case
-- **Admin** — user list, role assignment, stats
+| Folder | Purpose |
+|--------|---------|
+| **src/api** | Axios client, interceptors (JWT + refresh), API endpoints (auth, cases, complaints, evidence, suspects, interrogations, captain-decisions, trials, verdicts, tips, rewards, payments, statistics) |
+| **src/components** | Reusable UI (Button, Card, Input, Modal, Skeleton, etc.) and layout (RootLayout, DashboardLayout) |
+| **src/config** | Dashboard modules (role-based: cases, complaints, board, high-priority, reports, documents, tips, captain-decision, chief-approval, reward-verify, trials, admin) |
+| **src/hooks** | React Query and custom hooks (e.g. useSuspects, useSuspectsHighPriority) |
+| **src/pages** | Page components |
+| **src/routes** | Router, protected routes, role-based redirects |
+| **src/store** | Zustand auth store (user, tokens, hasRole, roleNames) |
+| **src/types** | TypeScript interfaces (User, Case, Complaint, Evidence, Suspect, Interrogation, Trial, Verdict, etc.) |
+| **src/utils** | Helpers (formatDate, formatCurrencyRials, cn) |
+
+## Pages & Routes
+
+| Route | Description |
+|-------|-------------|
+| **/** | Home — intro, link to Most Wanted and Submit Tip |
+| **/login** | Login (identifier + password) |
+| **/register** | Register (username, password, email, phone, full_name, national_id, optional roles) |
+| **/most-wanted** | Public Most Wanted list (approved suspects, score, reward) |
+| **/submit-tip** | Public submit tip form |
+| **/dashboard** | Dashboard overview (role-based modules in sidebar) |
+| **/dashboard/cases** | Cases list and create |
+| **/dashboard/cases/:id** | Case detail: assign detective, suspects, interrogations, captain decision panel (detective/sergeant scores), submit to sergeant |
+| **/dashboard/complaints** | Complaints list |
+| **/dashboard/complaints/:id** | Complaint detail (trainee/officer review) |
+| **/dashboard/board** | Detective Board — draggable evidence cards, connections, export as image |
+| **/dashboard/high-priority** | Most Wanted (dashboard) — approved suspects, score, reward |
+| **/dashboard/reports** | Case reports — select case, view report, print |
+| **/dashboard/documents** | Documents & Evidence — list/add evidence by case |
+| **/dashboard/tips** | Tips & Rewards — list tips, officer/detective review, redeem |
+| **/dashboard/captain-decision** | Captain Decision — GUILTY/NOT GUILTY after interrogation scores (CRITICAL → chief approval) |
+| **/dashboard/chief-approval** | Chief Approval — approve/reject captain decision for CRITICAL cases |
+| **/dashboard/reward-verify** | Reward Verification — verify by national ID + code, mark paid |
+| **/dashboard/trials** | Trials list (Judge); open trial for full case, arrested person, interrogations, captain decisions, record verdict |
+| **/dashboard/trials/:id** | Trial detail — full case data, defendant, detective/sergeant comments, verdict form |
+| **/dashboard/admin** | Admin Panel — users, assign roles, stats (System Administrator only) |
+
+## Dashboard Modules (by role)
+
+Modules shown in the sidebar depend on the user’s roles. Roles include: System Administrator, Complainant / Witness, Intern, Police Officer, Detective, Sergeant, Captain, Police Chief, Judge, Forensic Doctor. See `src/config/dashboardModules.ts` for the full list and paths.
+
+## Docker
+
+Build and run:
+
+```bash
+docker build -t police-frontend .
+docker run -p 3000:80 police-frontend
+```
+
+For full stack (backend + frontend), add the frontend service to your root `docker-compose.yml` and point the frontend at the backend API (e.g. proxy `/api` to the backend service).
 
 ## Tests
 
-At least 5 tests are included: `Button.test.tsx`, `authStore.test.ts`, `dashboardModules.test.ts`, `cn.test.ts`, `HomePage.test.tsx`. Run with `npm run test`.
+Tests include Button, authStore, dashboardModules, cn, HomePage. Run with `npm run test`.
+
+## License
+
+University project — Semester 7 Web Course.
