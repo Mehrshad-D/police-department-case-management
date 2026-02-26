@@ -8,18 +8,20 @@ from django.utils import timezone
 
 
 class Suspect(models.Model):
-    """Suspect linked to a case. Status: under pursuit -> arrested -> etc."""
-    STATUS_UNDER_PURSUIT = 'under_pursuit'
-    STATUS_HIGH_PRIORITY = 'high_priority'  # After >1 month
+    """Suspect linked to a case. Once added -> UNDER_INVESTIGATION; >30 days -> MOST_WANTED."""
+    STATUS_UNDER_INVESTIGATION = 'under_investigation'
+    STATUS_MOST_WANTED = 'most_wanted'  # Under investigation > 30 days
     STATUS_ARRESTED = 'arrested'
     STATUS_RELEASED = 'released'
     STATUS_CONVICTED = 'convicted'
+    STATUS_REJECTED = 'rejected'
     STATUS_CHOICES = [
-        (STATUS_UNDER_PURSUIT, 'Under Pursuit'),
-        (STATUS_HIGH_PRIORITY, 'High Priority'),
+        (STATUS_UNDER_INVESTIGATION, 'Under Investigation'),
+        (STATUS_MOST_WANTED, 'Most Wanted'),
         (STATUS_ARRESTED, 'Arrested'),
         (STATUS_RELEASED, 'Released'),
         (STATUS_CONVICTED, 'Convicted'),
+        (STATUS_REJECTED, 'Rejected'),
     ]
 
     case = models.ForeignKey(
@@ -32,7 +34,8 @@ class Suspect(models.Model):
         on_delete=models.CASCADE,
         related_name='suspect_in_cases',
     )
-    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_UNDER_PURSUIT)
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_UNDER_INVESTIGATION)
+    rejection_message = models.TextField(blank=True)
     proposed_by_detective = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -48,8 +51,7 @@ class Suspect(models.Model):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     marked_at = models.DateTimeField(auto_now_add=True)  # When marked as suspect
-    # For public listing: ranking_score = max(days_pursued) * max(crime_severity); reward = score * 20_000_000
-    first_pursuit_date = models.DateTimeField(auto_now_add=True)  # When status became under_pursuit
+    first_pursuit_date = models.DateTimeField(auto_now_add=True)  # When status became under_investigation
 
     class Meta:
         unique_together = [['case', 'user']]
@@ -62,16 +64,36 @@ class Suspect(models.Model):
         return f"Suspect: {self.user} in Case #{self.case_id}"
 
     @property
-    def days_pursued(self):
-        if self.status not in (self.STATUS_UNDER_PURSUIT, self.STATUS_HIGH_PRIORITY):
+    def days_under_investigation(self):
+        """Days since marked as suspect while under investigation or most_wanted."""
+        if self.status not in (self.STATUS_UNDER_INVESTIGATION, self.STATUS_MOST_WANTED):
             return 0
         delta = timezone.now() - self.first_pursuit_date
         return max(0, delta.days)
 
-    def update_high_priority(self):
-        """If under_pursuit and >1 month, set high_priority."""
-        if self.status == self.STATUS_UNDER_PURSUIT and self.days_pursued >= 31:
-            self.status = self.STATUS_HIGH_PRIORITY
+    @property
+    def days_pursued(self):
+        """Alias for ranking: same as days_under_investigation for under_investigation/most_wanted."""
+        return self.days_under_investigation
+
+    def crime_degree(self):
+        """Crime severity 1-4: Level 3=1, Level 2=2, Level 1=3, Crisis=4."""
+        from cases.models import Case
+        # Case severity: 3=minor, 2=moderate, 1=major, 0=crisis -> degree 1,2,3,4
+        return 4 - self.case.severity
+
+    def ranking_score(self):
+        """score = max(days_under_investigation) * max(crime_degree). For single case: days * crime_degree."""
+        return self.days_under_investigation * self.crime_degree()
+
+    def reward_rials(self):
+        """reward = score * 20,000,000 (Rials)."""
+        return self.ranking_score() * 20_000_000
+
+    def update_most_wanted(self):
+        """If under_investigation and >30 days, set most_wanted."""
+        if self.status == self.STATUS_UNDER_INVESTIGATION and self.days_under_investigation > 30:
+            self.status = self.STATUS_MOST_WANTED
             self.save(update_fields=['status'])
 
     def mark_released(self):

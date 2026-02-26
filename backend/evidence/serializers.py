@@ -280,6 +280,8 @@ class EvidenceLinkSerializer(serializers.ModelSerializer):
 
 
 class EvidenceLinkCreateSerializer(serializers.ModelSerializer):
+    link_type = serializers.CharField(required=False, default='red')
+
     class Meta:
         model = EvidenceLink
         fields = ['evidence_from', 'evidence_to', 'link_type']

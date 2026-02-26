@@ -35,6 +35,7 @@ from accounts.permissions import (
     IsPoliceOfficer,
     IsIntern,
     IsSupervisor,
+    IsDetective,
     has_any_role,
 )
 from core.utils import log_audit, notify
@@ -74,6 +75,41 @@ class CaseDetailView(generics.RetrieveUpdateAPIView):
         if self.request.method in ('PUT', 'PATCH'):
             return CaseCreateUpdateSerializer
         return CaseDetailSerializer
+
+
+class CaseSubmitSuspectsToSergeantView(APIView):
+    """Detective submits suspects list to sergeant. Case status -> WAITING_SERGEANT_APPROVAL."""
+    permission_classes = [IsAuthenticated, IsDetective]
+
+    def post(self, request, pk):
+        case = get_object_or_404(Case, pk=pk)
+        if case.status not in (Case.STATUS_OPEN, Case.STATUS_UNDER_INVESTIGATION):
+            return Response(
+                {'success': False, 'error': {'message': 'Case must be Open or Under Investigation to submit suspects.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from suspects.models import Suspect
+        pending = case.suspects.filter(
+            status=Suspect.STATUS_UNDER_INVESTIGATION,
+            approved_by_supervisor__isnull=True,
+        )
+        if not pending.exists():
+            return Response(
+                {'success': False, 'error': {'message': 'No pending suspects to submit. Add suspects first.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        case.status = Case.STATUS_WAITING_SERGEANT_APPROVAL
+        case.save(update_fields=['status', 'updated_at'])
+        log_audit(request.user, 'status_change', 'Case', case.pk, 'Suspects list submitted to sergeant')
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        for u in User.objects.filter(roles__name='Sergeant'):
+            notify(u, 'Suspects list for review', f'Case #{case.pk}: {case.title}', 'suspects_submitted', 'Case', case.pk)
+        return Response({
+            'success': True,
+            'data': CaseDetailSerializer(case).data,
+            'message': 'Suspects list submitted to sergeant for review.',
+        })
 
 
 class CrimeSceneCaseCreateView(APIView):

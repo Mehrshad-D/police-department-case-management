@@ -187,7 +187,7 @@ class EvidenceLink(models.Model):
         on_delete=models.CASCADE,
         related_name='links_to',
     )
-    link_type = models.CharField(max_length=64, blank=True)
+    link_type = models.CharField(max_length=64, blank=True, default='red')  # red = connection line on detective board
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

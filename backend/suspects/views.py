@@ -4,18 +4,20 @@ Suspect proposal, supervisor review, interrogation, arrest order, high-priority 
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
 from .models import Suspect, Interrogation, ArrestOrder
+from cases.models import Case
 from .serializers import (
     SuspectListSerializer,
     SuspectDetailSerializer,
     SuspectProposeSerializer,
     SuspectSupervisorReviewSerializer,
+    MostWantedPublicSerializer,
     InterrogationSerializer,
     InterrogationCreateSerializer,
     InterrogationCaptainDecisionSerializer,
@@ -25,6 +27,19 @@ from accounts.permissions import IsDetective, IsSupervisor, IsCaptain, IsPoliceC
 from core.utils import log_audit, notify
 
 User = get_user_model()
+
+
+def _maybe_clear_waiting_sergeant(case):
+    """If case is WAITING_SERGEANT_APPROVAL and no suspects left pending sergeant review, set back to under_investigation."""
+    if case.status != Case.STATUS_WAITING_SERGEANT_APPROVAL:
+        return
+    pending = case.suspects.filter(
+        approved_by_supervisor__isnull=True,
+        status=Suspect.STATUS_UNDER_INVESTIGATION,
+    ).exists()
+    if not pending:
+        case.status = Case.STATUS_UNDER_INVESTIGATION
+        case.save(update_fields=['status', 'updated_at'])
 
 
 class SuspectListCreateView(generics.ListCreateAPIView):
@@ -52,14 +67,13 @@ class SuspectListCreateView(generics.ListCreateAPIView):
             )
         ser = SuspectProposeSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        from cases.models import Case
         case = get_object_or_404(Case, pk=ser.validated_data['case_id'])
         user = get_object_or_404(User, pk=ser.validated_data['user_id'])
         suspect, created = Suspect.objects.get_or_create(
             case=case,
             user=user,
             defaults={
-                'status': Suspect.STATUS_UNDER_PURSUIT,
+                'status': Suspect.STATUS_UNDER_INVESTIGATION,
                 'proposed_by_detective': request.user,
             },
         )
@@ -81,12 +95,12 @@ class SuspectDetailView(generics.RetrieveAPIView):
 
 
 class SuspectSupervisorReviewView(APIView):
-    """Sergeant approves (arrest starts) or rejects suspect."""
+    """Sergeant approves (arrest starts) or rejects suspect. Rejection notifies detective; case remains open."""
     permission_classes = [IsAuthenticated, IsSupervisor]
 
     def post(self, request, pk):
         suspect = get_object_or_404(Suspect, pk=pk)
-        if suspect.approved_by_supervisor_id:
+        if suspect.approved_by_supervisor_id or suspect.status == Suspect.STATUS_REJECTED:
             return Response(
                 {'success': False, 'error': {'message': 'Already reviewed.'}},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -95,16 +109,38 @@ class SuspectSupervisorReviewView(APIView):
         ser.is_valid(raise_exception=True)
         action = ser.validated_data['action']
         if action == 'reject':
-            suspect.delete()
-            log_audit(request.user, 'reject', 'Suspect', pk, 'Suspect proposal rejected')
-            return Response({'success': True, 'data': {'message': 'Suspect rejected.'}})
+            msg = ser.validated_data.get('rejection_message', '') or 'Suspect proposal rejected by sergeant.'
+            suspect.status = Suspect.STATUS_REJECTED
+            suspect.rejection_message = msg
+            suspect.approved_by_supervisor = None
+            suspect.save(update_fields=['status', 'rejection_message', 'approved_by_supervisor'])
+            log_audit(request.user, 'reject', 'Suspect', suspect.pk, 'Suspect rejected by sergeant')
+            if suspect.case.assigned_detective_id:
+                notify(
+                    suspect.case.assigned_detective,
+                    'Suspect rejected',
+                    f'Case #{suspect.case_id}: {msg}',
+                    'suspect_rejected',
+                    'Suspect',
+                    suspect.pk,
+                )
+            _maybe_clear_waiting_sergeant(suspect.case)
+            return Response({'success': True, 'data': SuspectDetailSerializer(suspect).data})
         suspect.approved_by_supervisor = request.user
         suspect.approved_at = timezone.now()
         suspect.status = Suspect.STATUS_ARRESTED
         suspect.save()
         log_audit(request.user, 'approve', 'Suspect', suspect.pk, 'Suspect approved; arrest started')
         if suspect.case.assigned_detective_id:
-            notify(suspect.case.assigned_detective, 'Suspect approved', f'Suspect arrested in case #{suspect.case_id}', 'suspect_approved', 'Suspect', suspect.pk)
+            notify(
+                suspect.case.assigned_detective,
+                'Suspect approved',
+                f'Suspect arrested in case #{suspect.case_id}. Arrest process begins.',
+                'suspect_approved',
+                'Suspect',
+                suspect.pk,
+            )
+        _maybe_clear_waiting_sergeant(suspect.case)
         return Response({'success': True, 'data': SuspectDetailSerializer(suspect).data})
 
 
@@ -127,7 +163,7 @@ class InterrogationListCreateView(generics.ListCreateAPIView):
 
 
 class InterrogationCaptainDecisionView(APIView):
-    """Captain issues final decision. For critical crimes, chief must confirm."""
+    """Captain issues final decision. If crime severity is CRITICAL (Crisis), chief must also approve."""
     permission_classes = [IsAuthenticated, IsCaptain]
 
     def post(self, request, pk):
@@ -138,7 +174,7 @@ class InterrogationCaptainDecisionView(APIView):
         interrogation.captain_decided_by = request.user
         interrogation.captain_decided_at = timezone.now()
         case = interrogation.suspect.case
-        if case.severity == case.SEVERITY_CRISIS:
+        if case.severity == Case.SEVERITY_CRISIS:
             interrogation.chief_confirmed = False
             for u in User.objects.filter(roles__name='Police Chief'):
                 notify(u, 'Chief confirmation required', f'Case #{case.pk} interrogation', 'chief_confirm', 'Interrogation', interrogation.pk)
@@ -176,12 +212,25 @@ class ArrestOrderListCreateView(generics.ListCreateAPIView):
 
 
 class SuspectHighPriorityListView(generics.ListAPIView):
-    """Public listing: suspects with status high_priority (>1 month pursued)."""
+    """Dashboard listing: suspects with status most_wanted (under investigation >30 days)."""
     serializer_class = SuspectListSerializer
-    permission_classes = [IsAuthenticated]  # Or AllowAny for public; spec says "public listing"
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = Suspect.objects.filter(status=Suspect.STATUS_HIGH_PRIORITY)
-        for s in Suspect.objects.filter(status=Suspect.STATUS_UNDER_PURSUIT):
-            s.update_high_priority()
-        return Suspect.objects.filter(status=Suspect.STATUS_HIGH_PRIORITY).order_by('-first_pursuit_date')
+        for s in Suspect.objects.filter(status=Suspect.STATUS_UNDER_INVESTIGATION):
+            s.update_most_wanted()
+        return Suspect.objects.filter(status=Suspect.STATUS_MOST_WANTED).order_by('-first_pursuit_date')
+
+
+class MostWantedPublicListView(generics.ListAPIView):
+    """Public Most Wanted page: photo, personal details, ranking by score, reward = score * 20,000,000 Rials."""
+    serializer_class = MostWantedPublicSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        qs = Suspect.objects.filter(status__in=(Suspect.STATUS_UNDER_INVESTIGATION, Suspect.STATUS_MOST_WANTED))
+        for s in qs:
+            s.update_most_wanted()
+        most_wanted = Suspect.objects.filter(status=Suspect.STATUS_MOST_WANTED)
+        # Sort by ranking_score descending (score = days * crime_degree)
+        return sorted(most_wanted, key=lambda s: s.ranking_score(), reverse=True)
