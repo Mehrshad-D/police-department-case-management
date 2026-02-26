@@ -1,6 +1,6 @@
 # Police Case Management — Frontend
 
-Production-grade React frontend for the Police Department Case Management backend.
+React frontend for the Police Department Case Management backend. Role-based dashboard with cases, complaints, evidence, suspects, interrogations, captain/chief decisions, trials & verdicts, tips & rewards, and admin.
 
 ## Stack
 
@@ -8,11 +8,11 @@ Production-grade React frontend for the Police Department Case Management backen
 - **Vite** — build tool
 - **TailwindCSS** — styling
 - **React Router** — routing
-- **Zustand** — auth state
-- **TanStack Query** — API state
-- **Axios** — HTTP client
+- **Zustand** — auth state (persisted)
+- **TanStack Query** — API state and caching
+- **Axios** — HTTP client (JWT, refresh)
 - **Framer Motion** — animations
-- **Jest + React Testing Library** (Vitest) — tests
+- **Vitest + React Testing Library** — tests
 
 ## Setup
 
@@ -20,13 +20,13 @@ Production-grade React frontend for the Police Department Case Management backen
 npm install
 ```
 
-Create `.env` (optional):
+Optional `.env`:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8000/api
 ```
 
-With Vite proxy (default), the dev server forwards `/api` to the backend. Run backend on port 8000.
+Default dev config uses this URL when `DEV` is true. Run the backend on port 8000.
 
 ## Scripts
 
