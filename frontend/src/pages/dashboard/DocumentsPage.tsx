@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useEvidenceList } from '@/hooks/useEvidence'
 import { useEvidenceCreate } from '@/hooks/useEvidence'
 import { useCasesList } from '@/hooks/useCases'
@@ -16,12 +16,35 @@ function ensureArray<T>(data: T[] | { results: T[] }): T[] {
   return Array.isArray(data) ? data : (data as { results: T[] }).results ?? []
 }
 
+const EVIDENCE_TYPES = [
+  { value: 'witness', label: 'Witness' },
+  { value: 'biological', label: 'Biological' },
+  { value: 'vehicle', label: 'Vehicle' },
+  { value: 'id_document', label: 'Identification Document' },
+  { value: 'other', label: 'Other' },
+] as const
+
 export function DocumentsPage() {
   const [caseId, setCaseId] = useState<string>('')
   const [modalOpen, setModalOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState<string>('other')
+  // Witness
+  const [transcript, setTranscript] = useState('')
+  const [witnessFiles, setWitnessFiles] = useState<{ file: File; mediaType: string }[]>([])
+  const witnessFileRef = useRef<HTMLInputElement>(null)
+  // Biological
+  const [biologicalImages, setBiologicalImages] = useState<File[]>([])
+  const biologicalImagesRef = useRef<HTMLInputElement>(null)
+  // Vehicle
+  const [vehicleModel, setVehicleModel] = useState('')
+  const [vehicleColor, setVehicleColor] = useState('')
+  const [licensePlate, setLicensePlate] = useState('')
+  const [serialNumber, setSerialNumber] = useState('')
+  // ID Document
+  const [ownerFullName, setOwnerFullName] = useState('')
+  const [attributesJson, setAttributesJson] = useState('{}')
 
   const { data: casesData } = useCasesList()
   const casesList = casesData ? ensureArray(casesData as Case[] | { results: Case[] }) : []
@@ -29,15 +52,94 @@ export function DocumentsPage() {
   const createEvidence = useEvidenceCreate()
   const list = data ? ensureArray(data as Evidence[] | { results: Evidence[] }) : []
 
+  const resetForm = () => {
+    setTitle('')
+    setDescription('')
+    setTranscript('')
+    setWitnessFiles([])
+    setBiologicalImages([])
+    setVehicleModel('')
+    setVehicleColor('')
+    setLicensePlate('')
+    setSerialNumber('')
+    setOwnerFullName('')
+    setAttributesJson('{}')
+    setModalOpen(false)
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!caseId || !title) return
+    if (!caseId || !title.trim()) return
+    if (type === 'biological' && biologicalImages.length === 0) {
+      return
+    }
+    if (type === 'vehicle') {
+      const hasPlate = licensePlate.trim().length > 0
+      const hasSerial = serialNumber.trim().length > 0
+      if (hasPlate && hasSerial) return
+      if (!hasPlate && !hasSerial) return
+    }
+
     const payload = new FormData()
     payload.append('case', caseId)
     payload.append('evidence_type', type)
-    payload.append('title', title)
+    payload.append('title', title.trim())
     payload.append('description', description)
-    createEvidence.mutate(payload, { onSuccess: () => { setModalOpen(false); setTitle(''); setDescription(''); } })
+
+    if (type === 'witness') {
+      payload.append('transcript', transcript)
+      witnessFiles.forEach(({ file, mediaType }, i) => {
+        payload.append(`media_files_${i}`, file)
+        payload.append(`media_files_${i}_type`, mediaType)
+      })
+    }
+    if (type === 'biological') {
+      biologicalImages.forEach((file) => payload.append('images', file))
+    }
+    if (type === 'vehicle') {
+      payload.append('model', vehicleModel)
+      payload.append('color', vehicleColor)
+      payload.append('license_plate', licensePlate)
+      payload.append('serial_number', serialNumber)
+    }
+    if (type === 'id_document') {
+      payload.append('owner_full_name', ownerFullName)
+      try {
+        const attrs = attributesJson.trim() ? JSON.parse(attributesJson) : {}
+        payload.append('attributes', JSON.stringify(attrs))
+      } catch {
+        payload.append('attributes', '{}')
+      }
+    }
+
+    createEvidence.mutate(payload, { onSuccess: resetForm })
+  }
+
+  const addWitnessFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    const next: { file: File; mediaType: string }[] = [...witnessFiles]
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i]
+      const t = f.type
+      const mediaType = t.startsWith('image/') ? 'image' : t.startsWith('video/') ? 'video' : 'audio'
+      next.push({ file: f, mediaType })
+    }
+    setWitnessFiles(next)
+    if (witnessFileRef.current) witnessFileRef.current.value = ''
+  }
+
+  const addBiologicalImages = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    setBiologicalImages((prev) => [...prev, ...Array.from(files)])
+    if (biologicalImagesRef.current) biologicalImagesRef.current.value = ''
+  }
+
+  const vehicleValid = () => {
+    const hasPlate = licensePlate.trim().length > 0
+    const hasSerial = serialNumber.trim().length > 0
+    return (hasPlate && !hasSerial) || (!hasPlate && hasSerial)
   }
 
   return (
@@ -89,11 +191,9 @@ export function DocumentsPage() {
               value={type}
               onChange={(e) => setType(e.target.value)}
             >
-              <option value="witness">Witness</option>
-              <option value="biological">Biological</option>
-              <option value="vehicle">Vehicle</option>
-              <option value="id_document">ID Document</option>
-              <option value="other">Other</option>
+              {EVIDENCE_TYPES.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -104,10 +204,137 @@ export function DocumentsPage() {
             <label className="block text-sm text-slate-400 mb-1">Description</label>
             <Input value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
+
+          {type === 'witness' && (
+            <>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Transcript (optional)</label>
+                <textarea
+                  value={transcript}
+                  onChange={(e) => setTranscript(e.target.value)}
+                  className="w-full rounded-lg bg-slate-800 border border-slate-600 text-slate-200 px-4 py-2.5 min-h-[80px]"
+                  placeholder="Witness statement or transcript"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Media files (image / video / audio)</label>
+                <input
+                  ref={witnessFileRef}
+                  type="file"
+                  accept="image/*,video/*,audio/*"
+                  multiple
+                  onChange={addWitnessFiles}
+                  className="block w-full text-sm text-slate-400 file:mr-4 file:rounded file:border-0 file:bg-primary-600 file:px-4 file:py-2 file:text-slate-100"
+                />
+                {witnessFiles.length > 0 && (
+                  <ul className="mt-2 text-xs text-slate-500">
+                    {witnessFiles.map((f, i) => (
+                      <li key={i} className="flex items-center justify-between">
+                        {f.file.name} ({f.mediaType})
+                        <button
+                          type="button"
+                          onClick={() => setWitnessFiles((p) => p.filter((_, j) => j !== i))}
+                          className="text-red-400 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+
+          {type === 'biological' && (
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Images (at least 1 required)</label>
+              <input
+                ref={biologicalImagesRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={addBiologicalImages}
+                className="block w-full text-sm text-slate-400 file:mr-4 file:rounded file:border-0 file:bg-primary-600 file:px-4 file:py-2 file:text-slate-100"
+              />
+              {biologicalImages.length > 0 && (
+                <ul className="mt-2 text-xs text-slate-500">
+                  {biologicalImages.map((f, i) => (
+                    <li key={i} className="flex items-center justify-between">
+                      {f.name}
+                      <button
+                        type="button"
+                        onClick={() => setBiologicalImages((p) => p.filter((_, j) => j !== i))}
+                        className="text-red-400 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {biologicalImages.length === 0 && (
+                <p className="text-amber-500 text-xs mt-1">Add at least one image.</p>
+              )}
+            </div>
+          )}
+
+          {type === 'vehicle' && (
+            <>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Model</label>
+                <Input value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Color</label>
+                <Input value={vehicleColor} onChange={(e) => setVehicleColor(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">License plate (optional if serial number set)</label>
+                <Input value={licensePlate} onChange={(e) => setLicensePlate(e.target.value)} placeholder="e.g. ABC-123" />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Serial number (optional if license plate set)</label>
+                <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />
+              </div>
+              {!vehicleValid() && (licensePlate.trim() || serialNumber.trim()) && (
+                <p className="text-amber-500 text-xs">Provide exactly one of license plate or serial number.</p>
+              )}
+            </>
+          )}
+
+          {type === 'id_document' && (
+            <>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Owner full name</label>
+                <Input value={ownerFullName} onChange={(e) => setOwnerFullName(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Attributes (JSON, optional)</label>
+                <textarea
+                  value={attributesJson}
+                  onChange={(e) => setAttributesJson(e.target.value)}
+                  className="w-full rounded-lg bg-slate-800 border border-slate-600 text-slate-200 px-4 py-2.5 font-mono text-sm min-h-[60px]"
+                  placeholder='{"document_type": "national_id", "number": "..."}'
+                />
+              </div>
+            </>
+          )}
+
           {createEvidence.isError && (
             <p className="text-sm text-red-400">{getApiErrorMessage(createEvidence.error)}</p>
           )}
-          <Button type="submit" loading={createEvidence.isPending}>Save</Button>
+          <Button
+            type="submit"
+            loading={createEvidence.isPending}
+            disabled={
+              type === 'biological' && biologicalImages.length === 0
+                ? true
+                : type === 'vehicle' ? !vehicleValid() : false
+            }
+          >
+            Save
+          </Button>
         </form>
       </Modal>
 
@@ -131,7 +358,7 @@ export function DocumentsPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-slate-500 line-clamp-2">{e.description || '—'}</p>
-                <p className="text-xs text-slate-600 mt-2">{formatDate(e.date_recorded)} · {e.recorder_username ?? '—'}</p>
+                <p className="text-xs text-slate-600 mt-2">{formatDate(e.date_recorded ?? e.created_at)} · {e.recorder_username ?? '—'}</p>
               </CardContent>
             </Card>
           ))}
