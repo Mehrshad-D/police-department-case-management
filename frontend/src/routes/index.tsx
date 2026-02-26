@@ -17,6 +17,7 @@ import { ReportsPage } from '@/pages/dashboard/ReportsPage'
 import { DocumentsPage } from '@/pages/dashboard/DocumentsPage'
 import { AdminPage } from '@/pages/dashboard/AdminPage'
 import { TipsPage } from '@/pages/tips/TipsPage'
+
 import { RewardClaimPage } from '@/pages/rewards/RewardClaimPage'
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
