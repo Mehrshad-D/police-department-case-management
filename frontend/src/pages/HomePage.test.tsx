@@ -1,29 +1,74 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { describe, it, expect, vi } from 'vitest'
+import { screen } from '@testing-library/react'
+import { renderWithProviders } from '@/test/renderWithProviders'
 import { HomePage } from './HomePage'
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false } },
-})
+// ✅ mock statistics hook BEFORE component import
+vi.mock('@/hooks/useStatistics', () => ({
+  useStatistics: vi.fn(),
+}))
 
-function Wrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <MemoryRouter>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </MemoryRouter>
-  )
-}
+import { useStatistics } from '@/hooks/useStatistics'
 
 describe('HomePage', () => {
-  it('renders intro and sign in link', () => {
-    render(
-      <Wrapper>
-        <HomePage />
-      </Wrapper>
-    )
-    expect(screen.getByText(/Police Department/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument()
+  it('renders hero section', () => {
+    ;(useStatistics as any).mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: null,
+    })
+
+    renderWithProviders(<HomePage />)
+
+    expect(
+      screen.getByText(/Case Management System/i)
+    ).toBeInTheDocument()
+  })
+
+  it('shows loading skeletons', () => {
+    (useStatistics as any).mockReturnValue({
+      data: null,
+      isLoading: true,
+      error: null,
+    })
+
+    renderWithProviders(<HomePage />)
+
+    expect(screen.getAllByText((_, el) => el?.className.includes('animate') ?? false)).toBeTruthy()
+  })
+
+  it('shows error message', () => {
+    ;(useStatistics as any).mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: new Error('fail'),
+    })
+
+    renderWithProviders(<HomePage />)
+
+    expect(
+      screen.getByText(/failed to load statistics/i)
+    ).toBeInTheDocument()
+  })
+
+  it('renders statistics when loaded', () => {
+    ;(useStatistics as any).mockReturnValue({
+      data: {
+        cases_total: 10,
+        cases_open: 5,
+        complaints_total: 20,
+        complaints_pending: 3,
+        evidence_total: 50,
+        suspects_high_priority: 2,
+        suspects_total: 8,
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    renderWithProviders(<HomePage />)
+
+    expect(screen.getByText('10')).toBeInTheDocument()
+    expect(screen.getByText('20')).toBeInTheDocument()
   })
 })
